@@ -1,69 +1,139 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+import {
+  goalProgress,
+  totalOutstanding,
+  totalsForAssets,
+} from "@/lib/calculations";
+import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
+import { useStore } from "@/lib/store";
+import {
+  Card,
+  EmptyState,
+  LinkButton,
+  PageHeader,
+  ProgressBar,
+  StatCard,
+} from "@/components/ui";
+
+export default function DashboardPage() {
+  const { assets, liabilities, goals, loaded } = useStore();
+
+  if (!loaded) return null;
+
+  const assetTotals = totalsForAssets(assets);
+  const outstanding = totalOutstanding(liabilities);
+  const netWorth = assetTotals.current - outstanding;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="space-y-8">
+      <PageHeader
+        title="Dashboard"
+        subtitle="A quick look at what you own, what you owe, and how your goals are going."
+      />
+
+      <StatCard
+        label="Net worth (assets − liabilities)"
+        value={formatCurrency(netWorth)}
+        hint={`${formatCurrency(assetTotals.current)} in assets − ${formatCurrency(outstanding)} owed`}
+        tone={netWorth >= 0 ? "positive" : "negative"}
+      />
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Assets</h2>
+          <Link
+            href="/assets"
+            className="text-sm font-medium text-slate-600 hover:text-slate-900"
+          >
+            View all →
+          </Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <StatCard
+            label="Total value now"
+            value={formatCurrency(assetTotals.current)}
+          />
+          <StatCard
+            label="Total money put in"
+            value={formatCurrency(assetTotals.invested)}
+          />
+          <StatCard
+            label="Total profit / loss"
+            value={`${formatCurrency(assetTotals.profitLoss)} (${formatPercent(assetTotals.profitLossPercent)})`}
+            tone={assetTotals.profitLoss >= 0 ? "positive" : "negative"}
+          />
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Liabilities</h2>
+          <Link
+            href="/liabilities"
+            className="text-sm font-medium text-slate-600 hover:text-slate-900"
+          >
+            View all →
+          </Link>
+        </div>
+        <StatCard
+          label="Total amount still to be paid"
+          value={formatCurrency(outstanding)}
+          hint={`${liabilities.length} ${liabilities.length === 1 ? "loan" : "loans"} tracked`}
+          tone={outstanding > 0 ? "negative" : "neutral"}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Goals ({goals.length})
+          </h2>
+          <Link
+            href="/goals"
+            className="text-sm font-medium text-slate-600 hover:text-slate-900"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            View all →
+          </Link>
         </div>
-      </main>
+        {goals.length === 0 ? (
+          <EmptyState
+            title="No goals yet"
+            message="Create a goal like “Build a house” and link the assets you are saving in for it."
+            action={<LinkButton href="/goals/new">Create a goal</LinkButton>}
+          />
+        ) : (
+          <div className="space-y-3">
+            {goals.map((goal) => {
+              const progress = goalProgress(goal, assets);
+              return (
+                <Card key={goal.id}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <Link
+                      href={`/goals/${goal.id}`}
+                      className="text-base font-semibold text-slate-900 hover:underline"
+                    >
+                      {goal.name}
+                    </Link>
+                    <span className="text-sm text-slate-500">
+                      by {formatDate(goal.targetDate)}
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <ProgressBar percent={progress.progressPercent} />
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {formatCurrency(progress.currentAmount)} of{" "}
+                    {formatCurrency(goal.targetAmount)} —{" "}
+                    {progress.progressPercent.toFixed(0)}% done
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
