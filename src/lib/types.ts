@@ -1,3 +1,5 @@
+import type { DebtDetails } from "./debt";
+
 export type AssetCategoryId =
   | "equity"
   | "debt"
@@ -109,6 +111,8 @@ export interface Asset {
   currentValue: number;
   startDate: string;
   notes: string;
+  /** Set for debt assets: the inputs its value is calculated from. */
+  debtDetails?: DebtDetails;
   createdAt: string;
 }
 

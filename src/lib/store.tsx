@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { deriveAsset } from "./debt";
 import type { Asset, Goal, Liability } from "./types";
 
 const STORAGE_KEY = "finance-tracker-data";
@@ -22,7 +23,7 @@ function readStorage(): StoredData {
     if (!raw) return EMPTY_DATA;
     const parsed = JSON.parse(raw) as Partial<StoredData>;
     return {
-      assets: parsed.assets ?? [],
+      assets: (parsed.assets ?? []).map((asset) => deriveAsset(asset)),
       liabilities: parsed.liabilities ?? [],
       goals: parsed.goals ?? [],
     };
@@ -71,11 +72,11 @@ export function useStore() {
   const loaded = useIsHydrated();
 
   const addAsset = useCallback((asset: Omit<Asset, "id" | "createdAt">) => {
-    const created: Asset = {
+    const created: Asset = deriveAsset({
       ...asset,
       id: newId(),
       createdAt: new Date().toISOString(),
-    };
+    });
     setData((prev) => ({ ...prev, assets: [...prev.assets, created] }));
     return created;
   }, []);
@@ -84,7 +85,9 @@ export function useStore() {
     (id: string, changes: Partial<Omit<Asset, "id">>) => {
       setData((prev) => ({
         ...prev,
-        assets: prev.assets.map((a) => (a.id === id ? { ...a, ...changes } : a)),
+        assets: prev.assets.map((a) =>
+          a.id === id ? deriveAsset({ ...a, ...changes }) : a,
+        ),
       }));
     },
     [],
