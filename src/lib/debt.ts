@@ -23,25 +23,40 @@ export const PERIODS_PER_YEAR: Record<CompoundingFrequency, number> = {
   yearly: 1,
 };
 
+export type TenureUnit = "days" | "months" | "years";
+
+export const TENURE_UNIT_OPTIONS: { value: TenureUnit; label: string }[] = [
+  { value: "days", label: "Days" },
+  { value: "months", label: "Months" },
+  { value: "years", label: "Years" },
+];
+
 export type BondPayout = "quarterly" | "half-yearly" | "yearly" | "cumulative";
 
+/** Tenure entered in days, months or years. */
+export interface Tenure {
+  tenureValue: number;
+  tenureUnit: TenureUnit;
+  /** Older assets stored the tenure in months or years. */
+  tenureMonths?: number;
+  tenureYears?: number;
+}
+
 export type DebtDetails =
-  | {
+  | ({
       kind: "fd";
       principal: number;
       annualRate: number;
       compounding: CompoundingFrequency;
       startDate: string;
-      tenureMonths: number;
-    }
-  | {
+    } & Tenure)
+  | ({
       kind: "rd";
       monthlyDeposit: number;
       annualRate: number;
       compounding: CompoundingFrequency;
       startDate: string;
-      tenureMonths: number;
-    }
+    } & Tenure)
   | {
       kind: "bond";
       faceValue: number;
@@ -52,14 +67,13 @@ export type DebtDetails =
       startDate: string;
       maturityDate: string;
     }
-  | {
+  | ({
       kind: "govt-scheme";
       contributionType: "lumpsum" | "yearly";
       amount: number;
       annualRate: number;
       startDate: string;
-      tenureYears: number;
-    }
+    } & Tenure)
   | {
       kind: "insurance";
       annualPremium: number;
@@ -75,14 +89,13 @@ export type DebtDetails =
       currentNav: number;
       startDate: string;
     }
-  | {
+  | ({
       kind: "other-debt";
       principal: number;
       annualRate: number;
       interestType: "simple" | "compound";
       startDate: string;
-      tenureMonths: number;
-    };
+    } & Tenure);
 
 export type DebtKind = DebtDetails["kind"];
 
@@ -108,6 +121,32 @@ const MS_PER_DAY = 86_400_000;
 const DAYS_PER_YEAR = 365.25;
 const MONTHS_PER_YEAR = 12;
 
+const YEARS_PER_UNIT: Record<TenureUnit, number> = {
+  days: 1 / DAYS_PER_YEAR,
+  months: 1 / MONTHS_PER_YEAR,
+  years: 1,
+};
+
+/** Tenure in years, falling back to the months / years fields of older assets. */
+export function tenureYears(tenure: Tenure): number {
+  if (Number.isFinite(tenure.tenureValue) && tenure.tenureValue > 0) {
+    return tenure.tenureValue * YEARS_PER_UNIT[tenure.tenureUnit ?? "months"];
+  }
+  if (tenure.tenureMonths) return tenure.tenureMonths / MONTHS_PER_YEAR;
+  if (tenure.tenureYears) return tenure.tenureYears;
+  return 0;
+}
+
+export function formatTenure(tenure: Tenure): string {
+  const years = tenureYears(tenure);
+  if (years <= 0) return "no tenure set";
+  if (Number.isFinite(tenure.tenureValue) && tenure.tenureValue > 0) {
+    return `${tenure.tenureValue} ${tenure.tenureUnit ?? "months"}`;
+  }
+  if (tenure.tenureMonths) return `${tenure.tenureMonths} months`;
+  return `${tenure.tenureYears} years`;
+}
+
 function yearsBetween(from: string, to: Date): number {
   if (!from) return 0;
   const start = new Date(from);
@@ -126,20 +165,17 @@ function compoundedValue(
   return principal * (1 + rate) ** (periods * years);
 }
 
-function addYears(date: string, years: number): string {
+function addDays(date: string, days: number): string {
   if (!date) return "";
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return "";
-  parsed.setFullYear(parsed.getFullYear() + years);
+  parsed.setDate(parsed.getDate() + Math.round(days));
   return parsed.toISOString().slice(0, 10);
 }
 
-function addMonths(date: string, months: number): string {
-  if (!date) return "";
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return "";
-  parsed.setMonth(parsed.getMonth() + months);
-  return parsed.toISOString().slice(0, 10);
+/** Maturity date for a tenure entered in days, months or years. */
+function maturityDateFor(startDate: string, tenure: Tenure): string {
+  return addDays(startDate, tenureYears(tenure) * DAYS_PER_YEAR);
 }
 
 export interface DebtValuation {
@@ -160,8 +196,8 @@ export function valueDebtAsset(
 ): DebtValuation {
   switch (details.kind) {
     case "fd": {
-      const tenureYears = details.tenureMonths / MONTHS_PER_YEAR;
-      const elapsed = Math.min(yearsBetween(details.startDate, asOf), tenureYears);
+      const totalYears = tenureYears(details);
+      const elapsed = Math.min(yearsBetween(details.startDate, asOf), totalYears);
       const currentValue = compoundedValue(
         details.principal,
         details.annualRate,
@@ -172,39 +208,40 @@ export function valueDebtAsset(
         details.principal,
         details.annualRate,
         details.compounding,
-        tenureYears,
+        totalYears,
       );
       return {
         invested: details.principal,
         currentValue,
         maturityValue,
-        maturityDate: addMonths(details.startDate, details.tenureMonths),
+        maturityDate: maturityDateFor(details.startDate, details),
         explanation: [
           `${details.annualRate}% a year, compounded ${details.compounding}.`,
-          `${elapsed.toFixed(2)} of ${tenureYears.toFixed(2)} years completed.`,
+          `${(elapsed * DAYS_PER_YEAR).toFixed(0)} of ${(totalYears * DAYS_PER_YEAR).toFixed(0)} days completed (tenure ${formatTenure(details)}).`,
         ],
       };
     }
     case "rd": {
-      const elapsedMonths = Math.floor(
-        yearsBetween(details.startDate, asOf) * MONTHS_PER_YEAR,
+      const totalYears = tenureYears(details);
+      const totalInstallments = Math.max(
+        Math.round(totalYears * MONTHS_PER_YEAR),
+        0,
       );
+      const held = yearsBetween(details.startDate, asOf);
+      const elapsedMonths = Math.floor(held * MONTHS_PER_YEAR);
       const installmentsPaid = details.startDate
-        ? Math.min(Math.max(elapsedMonths + 1, 0), details.tenureMonths)
+        ? Math.min(Math.max(elapsedMonths + 1, 0), totalInstallments)
         : 0;
       const periods = PERIODS_PER_YEAR[details.compounding];
       const rate = details.annualRate / 100 / periods;
       let currentValue = 0;
       for (let i = 0; i < installmentsPaid; i += 1) {
-        const heldYears = Math.max(
-          yearsBetween(details.startDate, asOf) - i / MONTHS_PER_YEAR,
-          0,
-        );
+        const heldYears = Math.max(held - i / MONTHS_PER_YEAR, 0);
         currentValue += details.monthlyDeposit * (1 + rate) ** (periods * heldYears);
       }
       let maturityValue = 0;
-      for (let i = 0; i < details.tenureMonths; i += 1) {
-        const heldYears = (details.tenureMonths - i) / MONTHS_PER_YEAR;
+      for (let i = 0; i < totalInstallments; i += 1) {
+        const heldYears = (totalInstallments - i) / MONTHS_PER_YEAR;
         maturityValue +=
           details.monthlyDeposit * (1 + rate) ** (periods * heldYears);
       }
@@ -212,9 +249,9 @@ export function valueDebtAsset(
         invested: details.monthlyDeposit * installmentsPaid,
         currentValue,
         maturityValue,
-        maturityDate: addMonths(details.startDate, details.tenureMonths),
+        maturityDate: maturityDateFor(details.startDate, details),
         explanation: [
-          `${installmentsPaid} of ${details.tenureMonths} monthly deposits paid.`,
+          `${installmentsPaid} of ${totalInstallments} monthly deposits paid (tenure ${formatTenure(details)}).`,
           `Each deposit earns ${details.annualRate}% a year, compounded ${details.compounding}.`,
         ],
       };
@@ -255,7 +292,7 @@ export function valueDebtAsset(
           maturityDate: details.maturityDate,
           explanation: [
             `Interest is kept in the bond and compounds at ${details.couponRate}% a year.`,
-            `${elapsed.toFixed(2)} of ${totalYears.toFixed(2)} years completed.`,
+            `${(elapsed * DAYS_PER_YEAR).toFixed(0)} of ${(totalYears * DAYS_PER_YEAR).toFixed(0)} days completed.`,
           ],
         };
       }
@@ -277,15 +314,13 @@ export function valueDebtAsset(
         maturityDate: details.maturityDate,
         explanation: [
           `Interest of ${annualCoupon.toFixed(0)} a year is paid out ${details.payout}, so it is not added to the value.`,
-          `Value = face value plus interest accrued since the last payout.`,
+          `Value = face value plus interest accrued in the last ${(accruedYears * DAYS_PER_YEAR).toFixed(0)} days.`,
         ],
       };
     }
     case "govt-scheme": {
-      const elapsed = Math.min(
-        yearsBetween(details.startDate, asOf),
-        details.tenureYears,
-      );
+      const totalYears = tenureYears(details);
+      const elapsed = Math.min(yearsBetween(details.startDate, asOf), totalYears);
       if (details.contributionType === "lumpsum") {
         return {
           invested: details.amount,
@@ -299,17 +334,18 @@ export function valueDebtAsset(
             details.amount,
             details.annualRate,
             "yearly",
-            details.tenureYears,
+            totalYears,
           ),
-          maturityDate: addYears(details.startDate, details.tenureYears),
+          maturityDate: maturityDateFor(details.startDate, details),
           explanation: [
             `One time deposit growing at ${details.annualRate}% a year, compounded yearly.`,
-            `${elapsed.toFixed(2)} of ${details.tenureYears} years completed.`,
+            `${(elapsed * DAYS_PER_YEAR).toFixed(0)} of ${(totalYears * DAYS_PER_YEAR).toFixed(0)} days completed (tenure ${formatTenure(details)}).`,
           ],
         };
       }
+      const totalContributions = Math.max(Math.ceil(totalYears), 0);
       const contributionsMade = details.startDate
-        ? Math.min(Math.floor(elapsed) + 1, details.tenureYears)
+        ? Math.min(Math.floor(elapsed) + 1, totalContributions)
         : 0;
       let currentValue = 0;
       for (let year = 0; year < contributionsMade; year += 1) {
@@ -321,21 +357,21 @@ export function valueDebtAsset(
         );
       }
       let maturityValue = 0;
-      for (let year = 0; year < details.tenureYears; year += 1) {
+      for (let year = 0; year < totalContributions; year += 1) {
         maturityValue += compoundedValue(
           details.amount,
           details.annualRate,
           "yearly",
-          details.tenureYears - year,
+          Math.max(totalYears - year, 0),
         );
       }
       return {
         invested: details.amount * contributionsMade,
         currentValue,
         maturityValue,
-        maturityDate: addYears(details.startDate, details.tenureYears),
+        maturityDate: maturityDateFor(details.startDate, details),
         explanation: [
-          `${contributionsMade} of ${details.tenureYears} yearly deposits made.`,
+          `${contributionsMade} of ${totalContributions} yearly deposits made (tenure ${formatTenure(details)}).`,
           `Balance grows at ${details.annualRate}% a year, compounded yearly.`,
         ],
       };
@@ -358,7 +394,10 @@ export function valueDebtAsset(
         invested,
         currentValue,
         maturityValue: details.maturityAmount,
-        maturityDate: addYears(details.startDate, details.policyTermYears),
+        maturityDate: addDays(
+          details.startDate,
+          details.policyTermYears * DAYS_PER_YEAR,
+        ),
         explanation: [
           `${premiumsPaid} of ${details.premiumTermYears} yearly premiums paid.`,
           `Estimated value moves from premiums paid towards the maturity amount over ${details.policyTermYears} years.`,
@@ -376,8 +415,8 @@ export function valueDebtAsset(
       };
     }
     case "other-debt": {
-      const tenureYears = details.tenureMonths / MONTHS_PER_YEAR;
-      const elapsed = Math.min(yearsBetween(details.startDate, asOf), tenureYears);
+      const totalYears = tenureYears(details);
+      const elapsed = Math.min(yearsBetween(details.startDate, asOf), totalYears);
       const value = (years: number) =>
         details.interestType === "simple"
           ? details.principal * (1 + (details.annualRate / 100) * years)
@@ -385,16 +424,117 @@ export function valueDebtAsset(
       return {
         invested: details.principal,
         currentValue: value(elapsed),
-        maturityValue: value(tenureYears),
-        maturityDate: addMonths(details.startDate, details.tenureMonths),
+        maturityValue: value(totalYears),
+        maturityDate: maturityDateFor(details.startDate, details),
         explanation: [
           `${details.annualRate}% a year, ${details.interestType} interest.`,
-          `${elapsed.toFixed(2)} of ${tenureYears.toFixed(2)} years completed.`,
+          `${(elapsed * DAYS_PER_YEAR).toFixed(0)} of ${(totalYears * DAYS_PER_YEAR).toFixed(0)} days completed (tenure ${formatTenure(details)}).`,
         ],
       };
     }
   }
 }
+
+export interface DebtFormula {
+  title: string;
+  /** The formula itself, one line per case. */
+  lines: string[];
+  /** What each symbol means. */
+  where: string[];
+}
+
+/** Shown above the inputs so the maths behind each debt type is visible. */
+export const DEBT_FORMULAS: Record<DebtKind, DebtFormula> = {
+  fd: {
+    title: "Fixed deposit",
+    lines: [
+      "Value today = P × (1 + r/n)^(n × t)",
+      "Maturity value = P × (1 + r/n)^(n × T)",
+    ],
+    where: [
+      "P = amount deposited",
+      "r = interest rate a year (7% → 0.07)",
+      "n = times interest is added a year (quarterly → 4)",
+      "t = years completed so far (days ÷ 365.25)",
+      "T = full tenure in years",
+    ],
+  },
+  rd: {
+    title: "Recurring deposit",
+    lines: [
+      "Value today = Σ D × (1 + r/n)^(n × tᵢ) for every deposit made",
+      "Maturity value = Σ D × (1 + r/n)^(n × (T − i/12)) for all deposits",
+    ],
+    where: [
+      "D = monthly deposit",
+      "tᵢ = years the i-th deposit has been held",
+      "r, n = rate a year and times interest is added a year",
+      "T = full tenure in years",
+    ],
+  },
+  bond: {
+    title: "Bond",
+    lines: [
+      "Interest paid out → Value today = F × Q + C × d/365.25",
+      "Cumulative → Value today = (B × Q) × (1 + c)^t",
+      "Maturity value = F × Q (or the compounded amount if cumulative)",
+    ],
+    where: [
+      "F = face value per bond, Q = number of bonds, B = price you paid",
+      "c = coupon rate a year, C = F × Q × c (interest a year)",
+      "d = days since the last interest payout",
+      "t = years since you bought it",
+    ],
+  },
+  "govt-scheme": {
+    title: "Government scheme (PPF, NSC, KVP, SSY)",
+    lines: [
+      "One time deposit → Value today = A × (1 + r)^t",
+      "Yearly deposit → Value today = Σ A × (1 + r)^(t − k) for each year k already deposited",
+    ],
+    where: [
+      "A = deposit amount",
+      "r = interest rate a year, added yearly",
+      "t = years completed so far",
+    ],
+  },
+  insurance: {
+    title: "Endowment / traditional policy",
+    lines: [
+      "Premiums paid = Pr × years of premium paid",
+      "Value today = Premiums paid + (M − Pr × N) × t/T",
+    ],
+    where: [
+      "Pr = premium a year, N = years you pay premium",
+      "M = guaranteed maturity amount, T = policy term in years",
+      "t = years completed so far",
+      "This is an estimate — a real surrender value depends on the insurer",
+    ],
+  },
+  "debt-mf": {
+    title: "Debt mutual fund / ETF",
+    lines: [
+      "Value today = Units × NAV today",
+      "Money put in = Units × average buy NAV",
+    ],
+    where: [
+      "NAV = net asset value of one unit",
+      "Nothing is compounded — the NAV already includes the interest earned",
+    ],
+  },
+  "other-debt": {
+    title: "Other debt",
+    lines: [
+      "Simple → Value today = P × (1 + r × t)",
+      "Compound → Value today = P × (1 + r)^t",
+    ],
+    where: [
+      "P = amount lent or invested",
+      "r = interest rate a year",
+      "t = years completed so far (days ÷ 365.25)",
+    ],
+  },
+};
 
 function round(value: number): number {
   return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;

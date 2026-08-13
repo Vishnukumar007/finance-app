@@ -4,11 +4,14 @@ import { Field, Select, TextInput } from "@/components/form";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   COMPOUNDING_OPTIONS,
+  DEBT_FORMULAS,
+  TENURE_UNIT_OPTIONS,
   valueDebtAsset,
   type BondPayout,
   type CompoundingFrequency,
   type DebtDetails,
   type DebtKind,
+  type TenureUnit,
 } from "@/lib/debt";
 
 export type DebtValues = Record<string, string>;
@@ -17,9 +20,14 @@ interface FieldSpec {
   key: string;
   label: string;
   hint?: string;
-  input: "number" | "date" | "select";
+  input: "number" | "date" | "select" | "tenure";
   options?: { value: string; label: string }[];
   placeholder?: string;
+}
+
+/** Amount plus a days / months / years unit, kept in `tenureValue` + `tenureUnit`. */
+function tenureField(label: string): FieldSpec {
+  return { key: "tenureValue", label, input: "tenure" };
 }
 
 const compoundingField: FieldSpec = {
@@ -42,12 +50,7 @@ export const DEBT_FIELDS: Record<DebtKind, FieldSpec[]> = {
     },
     compoundingField,
     { key: "startDate", label: "Deposit date", input: "date" },
-    {
-      key: "tenureMonths",
-      label: "Tenure (months)",
-      hint: "Example: 24 for 2 years",
-      input: "number",
-    },
+    tenureField("Tenure"),
   ],
   rd: [
     { key: "monthlyDeposit", label: "Monthly deposit (₹)", input: "number" },
@@ -59,7 +62,7 @@ export const DEBT_FIELDS: Record<DebtKind, FieldSpec[]> = {
     },
     compoundingField,
     { key: "startDate", label: "First deposit date", input: "date" },
-    { key: "tenureMonths", label: "Tenure (months)", input: "number" },
+    tenureField("Tenure"),
   ],
   bond: [
     {
@@ -108,7 +111,7 @@ export const DEBT_FIELDS: Record<DebtKind, FieldSpec[]> = {
       placeholder: "7.1",
     },
     { key: "startDate", label: "Started on", input: "date" },
-    { key: "tenureYears", label: "Tenure (years)", input: "number" },
+    tenureField("Tenure"),
   ],
   insurance: [
     { key: "annualPremium", label: "Premium a year (₹)", input: "number" },
@@ -145,7 +148,7 @@ export const DEBT_FIELDS: Record<DebtKind, FieldSpec[]> = {
       ],
     },
     { key: "startDate", label: "Started on", input: "date" },
-    { key: "tenureMonths", label: "Tenure (months)", input: "number" },
+    tenureField("Tenure"),
   ],
 };
 
@@ -154,6 +157,9 @@ export function defaultDebtValues(kind: DebtKind): DebtValues {
   for (const field of DEBT_FIELDS[kind]) {
     values[field.key] =
       field.input === "select" ? (field.options?.[0]?.value ?? "") : "";
+    if (field.input === "tenure") {
+      values.tenureUnit = kind === "govt-scheme" ? "years" : "months";
+    }
   }
   if (kind === "fd" || kind === "rd") values.compounding = "quarterly";
   return values;
@@ -165,7 +171,24 @@ export function debtValuesFromDetails(details: DebtDetails): DebtValues {
     if (key === "kind") continue;
     values[key] = String(value);
   }
+  // Assets saved before tenure units existed kept only months or years.
+  if (!values.tenureValue || values.tenureValue === "0") {
+    if (values.tenureMonths && values.tenureMonths !== "0") {
+      values.tenureValue = values.tenureMonths;
+      values.tenureUnit = "months";
+    } else if (values.tenureYears && values.tenureYears !== "0") {
+      values.tenureValue = values.tenureYears;
+      values.tenureUnit = "years";
+    }
+  }
   return values;
+}
+
+function tenure(values: DebtValues) {
+  return {
+    tenureValue: num(values, "tenureValue"),
+    tenureUnit: (values.tenureUnit ?? "months") as TenureUnit,
+  };
 }
 
 function num(values: DebtValues, key: string): number {
@@ -185,7 +208,7 @@ export function buildDebtDetails(
         annualRate: num(values, "annualRate"),
         compounding: (values.compounding ?? "quarterly") as CompoundingFrequency,
         startDate: values.startDate ?? "",
-        tenureMonths: num(values, "tenureMonths"),
+        ...tenure(values),
       };
     case "rd":
       return {
@@ -194,7 +217,7 @@ export function buildDebtDetails(
         annualRate: num(values, "annualRate"),
         compounding: (values.compounding ?? "quarterly") as CompoundingFrequency,
         startDate: values.startDate ?? "",
-        tenureMonths: num(values, "tenureMonths"),
+        ...tenure(values),
       };
     case "bond":
       return {
@@ -216,7 +239,7 @@ export function buildDebtDetails(
         amount: num(values, "amount"),
         annualRate: num(values, "annualRate"),
         startDate: values.startDate ?? "",
-        tenureYears: num(values, "tenureYears"),
+        ...tenure(values),
       };
     case "insurance":
       return {
@@ -244,9 +267,48 @@ export function buildDebtDetails(
           | "simple"
           | "compound",
         startDate: values.startDate ?? "",
-        tenureMonths: num(values, "tenureMonths"),
+        ...tenure(values),
       };
   }
+}
+
+/** Shows the maths used for this debt type, above the inputs. */
+export function DebtFormulaPanel({
+  kind,
+  defaultOpen = false,
+}: {
+  kind: DebtKind;
+  defaultOpen?: boolean;
+}) {
+  const formula = DEBT_FORMULAS[kind];
+  return (
+    <details
+      open={defaultOpen}
+      className="rounded-xl border border-slate-200 bg-white p-4 [&_summary]:list-none"
+    >
+      <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm font-medium text-slate-700">
+        <span>How is this calculated? — {formula.title} formula</span>
+        <span className="text-xs text-slate-400">show / hide</span>
+      </summary>
+      <div className="mt-3 space-y-3">
+        <div className="space-y-1">
+          {formula.lines.map((line) => (
+            <p
+              key={line}
+              className="rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100"
+            >
+              {line}
+            </p>
+          ))}
+        </div>
+        <ul className="space-y-1 text-xs text-slate-500">
+          {formula.where.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
+    </details>
+  );
 }
 
 export function DebtFields({
@@ -264,10 +326,34 @@ export function DebtFields({
 
   return (
     <div className="space-y-4">
+      <DebtFormulaPanel kind={kind} />
+
       <div className="grid gap-4 sm:grid-cols-2">
         {DEBT_FIELDS[kind].map((field) => (
           <Field key={field.key} label={field.label} hint={field.hint}>
-            {field.input === "select" ? (
+            {field.input === "tenure" ? (
+              <div className="flex gap-2">
+                <TextInput
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={values.tenureValue ?? ""}
+                  placeholder="0"
+                  onChange={(e) => onChange("tenureValue", e.target.value)}
+                />
+                <Select
+                  className="w-36"
+                  value={values.tenureUnit ?? "months"}
+                  onChange={(e) => onChange("tenureUnit", e.target.value)}
+                >
+                  {TENURE_UNIT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : field.input === "select" ? (
               <Select
                 value={values[field.key] ?? ""}
                 onChange={(e) => onChange(field.key, e.target.value)}
