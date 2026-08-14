@@ -16,13 +16,15 @@ import {
 import { assetProfitLoss, assetProfitLossPercent } from "@/lib/calculations";
 import { DebtFormulaPanel } from "@/components/debt-fields";
 import { valueDebtAsset } from "@/lib/debt";
-import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime, formatPercent } from "@/lib/format";
+import { useGrowwSync } from "@/lib/groww/use-groww";
 import { useStore } from "@/lib/store";
 import { getCategory } from "@/lib/types";
 
 export function AssetDetail({ assetId }: { assetId: string }) {
   const router = useRouter();
   const { assets, goals, loaded, updateAsset, deleteAsset } = useStore();
+  const { syncing, sync } = useGrowwSync();
   const [newValue, setNewValue] = useState("");
 
   const asset = assets.find((a) => a.id === assetId);
@@ -43,6 +45,7 @@ export function AssetDetail({ assetId }: { assetId: string }) {
   const debtDetails = asset.debtDetails;
   const valuation = debtDetails ? valueDebtAsset(debtDetails) : undefined;
   const usedInGoals = goals.filter((g) => g.linkedAssetIds.includes(asset.id));
+  const source = asset.source;
 
   function handleUpdateValue(event: React.FormEvent) {
     event.preventDefault();
@@ -71,9 +74,11 @@ export function AssetDetail({ assetId }: { assetId: string }) {
         subtitle={asset.institution || undefined}
         action={
           <div className="flex gap-2">
-            <LinkButton href={`/assets/${asset.id}/edit`} variant="secondary">
-              Edit
-            </LinkButton>
+            {asset.source ? null : (
+              <LinkButton href={`/assets/${asset.id}/edit`} variant="secondary">
+                Edit
+              </LinkButton>
+            )}
             <Button variant="danger" onClick={handleDelete}>
               Delete
             </Button>
@@ -102,7 +107,49 @@ export function AssetDetail({ assetId }: { assetId: string }) {
         />
       </div>
 
-      {debtDetails && valuation ? (
+      {source ? (
+        <Card>
+          <h2 className="text-base font-semibold text-slate-900">
+            {source.provider === "groww"
+              ? "Synced from Groww"
+              : "Imported from a Groww file"}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {source.provider === "groww"
+              ? "The quantity and value come from your Groww demat holdings, so there is nothing to update by hand."
+              : "These numbers come from the mutual fund file you uploaded. Upload a newer file to refresh them."}{" "}
+            Last updated {formatDateTime(source.syncedAt)}.
+          </p>
+          {source.missingSince ? (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Groww stopped returning this holding on{" "}
+              {formatDateTime(source.missingSince)}. It is kept here untouched —
+              delete it if you have sold it.
+            </p>
+          ) : null}
+          {source.priceUnavailable ? (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Groww had no live price for this holding, so the value shown is
+              the amount you put in, not today&apos;s market value.
+            </p>
+          ) : null}
+          <div className="mt-4">
+            {source.provider === "groww" ? (
+              <Button
+                variant="secondary"
+                onClick={() => void sync()}
+                disabled={syncing}
+              >
+                {syncing ? "Syncing…" : "Sync now"}
+              </Button>
+            ) : (
+              <LinkButton href="/connections" variant="secondary">
+                Upload a newer file
+              </LinkButton>
+            )}
+          </div>
+        </Card>
+      ) : debtDetails && valuation ? (
         <Card>
           <h2 className="text-base font-semibold text-slate-900">
             How this value is calculated

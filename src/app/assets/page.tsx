@@ -9,6 +9,7 @@ import {
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { ASSET_CATEGORIES, type Asset } from "@/lib/types";
+import { GrowwSyncCard } from "@/components/groww-sync-card";
 import {
   Badge,
   Card,
@@ -40,6 +41,8 @@ export default function AssetsPage() {
         subtitle="Everything you own, grouped by category."
         action={<LinkButton href="/assets/new">+ Add asset</LinkButton>}
       />
+
+      <GrowwSyncCard />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Total value now" value={formatCurrency(totals.current)} />
@@ -118,6 +121,17 @@ export default function AssetsPage() {
                             {asset.institution ? (
                               <p className="text-xs text-slate-500">
                                 {asset.institution}
+                              </p>
+                            ) : null}
+                            {asset.source ? (
+                              <p className="text-xs text-slate-400">
+                                {asset.source.provider === "groww-file"
+                                  ? "Imported from a Groww file"
+                                  : asset.source.missingSince
+                                  ? "No longer in Groww — check it"
+                                  : asset.source.priceUnavailable
+                                    ? "Synced from Groww · no live price"
+                                    : "Synced from Groww"}
                               </p>
                             ) : null}
                           </td>
