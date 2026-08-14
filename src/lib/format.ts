@@ -11,6 +11,18 @@ export function formatPercent(value: number): string {
   return `${value >= 0 ? "" : "-"}${Math.abs(value).toFixed(1)}%`;
 }
 
+export function formatDateTime(value: string): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function formatDate(value: string): string {
   if (!value) return "—";
   const date = new Date(value);

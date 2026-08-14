@@ -2,6 +2,13 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { deriveAsset } from "./debt";
+import { mergeGrowwHoldings } from "./groww/merge";
+import { mergeMfHoldings, type MfImportResult } from "./groww/mf-import";
+import type {
+  GrowwConnection,
+  GrowwImport,
+  GrowwSyncResult,
+} from "./groww/types";
 import type { Asset, Goal, Liability } from "./types";
 
 const STORAGE_KEY = "finance-tracker-data";
@@ -10,6 +17,8 @@ export interface StoredData {
   assets: Asset[];
   liabilities: Liability[];
   goals: Goal[];
+  groww?: GrowwConnection;
+  growwImport?: GrowwImport;
 }
 
 const EMPTY_DATA: StoredData = { assets: [], liabilities: [], goals: [] };
@@ -26,6 +35,8 @@ function readStorage(): StoredData {
       assets: (parsed.assets ?? []).map((asset) => deriveAsset(asset)),
       liabilities: parsed.liabilities ?? [],
       goals: parsed.goals ?? [],
+      groww: parsed.groww,
+      growwImport: parsed.growwImport,
     };
   } catch {
     return EMPTY_DATA;
@@ -139,6 +150,72 @@ export function useStore() {
     }));
   }, []);
 
+  const connectGroww = useCallback(() => {
+    setData((prev) => ({
+      ...prev,
+      groww: prev.groww ?? { connectedAt: new Date().toISOString() },
+    }));
+  }, []);
+
+  const disconnectGroww = useCallback(() => {
+    setData((prev) => ({ ...prev, groww: undefined }));
+  }, []);
+
+  /** Updates matching assets, adds new holdings and flags ones Groww no longer returns. */
+  const applyGrowwSync = useCallback((result: GrowwSyncResult) => {
+    setData((prev) => {
+      const merged = mergeGrowwHoldings(prev.assets, result, newId);
+      return {
+        ...prev,
+        assets: merged.assets,
+        groww: {
+          connectedAt: prev.groww?.connectedAt ?? result.syncedAt,
+          lastSyncedAt: result.syncedAt,
+          lastResult: { ...merged.report, gaps: result.gaps },
+        },
+      };
+    });
+  }, []);
+
+  const recordGrowwError = useCallback((message: string) => {
+    setData((prev) => ({
+      ...prev,
+      groww: {
+        connectedAt: prev.groww?.connectedAt ?? new Date().toISOString(),
+        lastSyncedAt: prev.groww?.lastSyncedAt,
+        lastResult: prev.groww?.lastResult,
+        lastError: message,
+      },
+    }));
+  }, []);
+
+  /** Applies an uploaded mutual fund file, keeping the problems it reported. */
+  const applyMfImport = useCallback(
+    (result: MfImportResult, fileName: string) => {
+      const importedAt = new Date().toISOString();
+      setData((prev) => {
+        const merged = mergeMfHoldings(
+          prev.assets,
+          result.holdings,
+          importedAt,
+          newId,
+        );
+        return {
+          ...prev,
+          assets: merged.assets,
+          growwImport: {
+            importedAt,
+            fileName,
+            added: merged.added,
+            updated: merged.updated,
+            problems: result.problems,
+          },
+        };
+      });
+    },
+    [],
+  );
+
   const addGoal = useCallback((goal: Omit<Goal, "id" | "createdAt">) => {
     const created: Goal = {
       ...goal,
@@ -179,6 +256,11 @@ export function useStore() {
       addGoal,
       updateGoal,
       deleteGoal,
+      connectGroww,
+      disconnectGroww,
+      applyGrowwSync,
+      recordGrowwError,
+      applyMfImport,
     }),
     [
       data,
@@ -192,6 +274,11 @@ export function useStore() {
       addGoal,
       updateGoal,
       deleteGoal,
+      connectGroww,
+      disconnectGroww,
+      applyGrowwSync,
+      recordGrowwError,
+      applyMfImport,
     ],
   );
 }
