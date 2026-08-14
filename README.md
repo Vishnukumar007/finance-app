@@ -28,7 +28,7 @@ Debt assets ask for how the instrument works instead of asking you for the value
 - **Debt MF / ETF** — units, average buy NAV, today's NAV.
 - **Other debt** — amount, rate, simple or compound, start date, tenure.
 
-The value today, the money put in so far and the maturity value are derived from those inputs and are recalculated as time passes.
+Tenure can be entered in **days, months or years**. The value today, the money put in so far and the maturity value are derived from those inputs and are recalculated as time passes. Each debt form (and the asset page) shows a "How is this calculated?" panel at the top with the exact formula used for that instrument.
 
 ### Liabilities
 - Add, edit, view and delete liabilities (home, vehicle, personal, education, credit card, gold, business, friends/family, other).
