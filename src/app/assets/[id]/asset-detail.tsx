@@ -14,6 +14,7 @@ import {
   StatCard,
 } from "@/components/ui";
 import { assetProfitLoss, assetProfitLossPercent } from "@/lib/calculations";
+import { DebtFormulaPanel } from "@/components/debt-fields";
 import { valueDebtAsset } from "@/lib/debt";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -39,9 +40,8 @@ export function AssetDetail({ assetId }: { assetId: string }) {
   }
 
   const profit = assetProfitLoss(asset);
-  const valuation = asset.debtDetails
-    ? valueDebtAsset(asset.debtDetails)
-    : undefined;
+  const debtDetails = asset.debtDetails;
+  const valuation = debtDetails ? valueDebtAsset(debtDetails) : undefined;
   const usedInGoals = goals.filter((g) => g.linkedAssetIds.includes(asset.id));
 
   function handleUpdateValue(event: React.FormEvent) {
@@ -102,7 +102,7 @@ export function AssetDetail({ assetId }: { assetId: string }) {
         />
       </div>
 
-      {valuation ? (
+      {debtDetails && valuation ? (
         <Card>
           <h2 className="text-base font-semibold text-slate-900">
             How this value is calculated
@@ -111,6 +111,9 @@ export function AssetDetail({ assetId }: { assetId: string }) {
             The value today comes from the details of this investment, so there
             is nothing to update by hand. Edit the asset to change them.
           </p>
+          <div className="mt-3">
+            <DebtFormulaPanel kind={debtDetails.kind} />
+          </div>
           <ul className="mt-3 space-y-1 text-sm text-slate-600">
             {valuation.explanation.map((line) => (
               <li key={line}>{line}</li>
