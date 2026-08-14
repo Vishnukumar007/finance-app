@@ -5,6 +5,7 @@ import { Field, Select, TextInput } from "@/components/form";
 import { Button, Card, PageHeader } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 import { clearCredentials, loadCredentials } from "@/lib/groww/client";
+import { parseMfCsv } from "@/lib/groww/mf-import";
 import type { GrowwCredentialMode, GrowwCredentials } from "@/lib/groww/types";
 import { useGrowwSync } from "@/lib/groww/use-groww";
 import { useStore } from "@/lib/store";
@@ -28,7 +29,14 @@ const MODES: { value: GrowwCredentialMode; label: string; hint: string }[] = [
 ];
 
 export default function ConnectionsPage() {
-  const { assets, loaded, connectGroww, disconnectGroww } = useStore();
+  const {
+    assets,
+    loaded,
+    growwImport,
+    connectGroww,
+    disconnectGroww,
+    applyMfImport,
+  } = useStore();
   const { connection, syncing, sync } = useGrowwSync();
 
   const [mode, setMode] = useState<GrowwCredentialMode>("access-token");
@@ -77,6 +85,16 @@ export default function ConnectionsPage() {
   }
 
   const activeMode = MODES.find((option) => option.value === mode)!;
+  const importedFunds = assets.filter(
+    (asset) => asset.source?.provider === "groww-file",
+  );
+
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    applyMfImport(parseMfCsv(await file.text()), file.name);
+    event.target.value = "";
+  }
 
   return (
     <div className="space-y-6">
@@ -244,6 +262,49 @@ export default function ConnectionsPage() {
             </li>
           </ul>
         </div>
+      </Card>
+
+      <Card className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">
+            Mutual funds from a file
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Groww&apos;s API does not give out mutual fund folios, so download
+            your mutual fund holdings from Groww as a CSV and upload it here.
+            Funds are matched on ISIN or folio number, so uploading a newer file
+            updates them instead of adding them twice.
+          </p>
+        </div>
+
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(e) => void handleFile(e)}
+          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
+        />
+
+        {growwImport ? (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-600">
+              {growwImport.fileName} · {formatDateTime(growwImport.importedAt)} ·
+              added {growwImport.added}, updated {growwImport.updated} ·{" "}
+              {importedFunds.length} funds in total.
+            </p>
+            {growwImport.problems.length > 0 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-medium text-amber-900">
+                  What could not be read from the file
+                </p>
+                <ul className="mt-2 space-y-1 text-xs text-amber-800">
+                  {growwImport.problems.map((problem) => (
+                    <li key={problem}>{problem}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </Card>
     </div>
   );

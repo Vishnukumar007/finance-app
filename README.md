@@ -38,6 +38,7 @@ Connect a Groww account under **Connections** and your Groww holdings appear as 
 - Synced assets cannot be edited by hand — the asset page shows when it was last updated and a **Sync now** button. A sync also runs on its own when the data is more than 30 minutes old.
 - A holding that stops coming back from Groww is flagged instead of deleted.
 - Anything Groww cannot give us is listed instead of guessed: **mutual fund folios, digital gold and MCX commodities are not part of the Groww Trading API**, and holdings without a live price show the invested amount.
+- **Mutual funds come in from a file instead**: download your mutual fund holdings from Groww as CSV and upload it under Connections. Columns are matched loosely (scheme, ISIN, folio, units, NAV, invested and current value), funds are matched on ISIN or folio so re-uploading updates them, and any row that cannot be read is listed rather than dropped.
 
 Credentials stay in your browser; they are sent to a small server route (`/api/groww/sync`) only for the duration of a sync, because Groww cannot be called directly from the browser.
 

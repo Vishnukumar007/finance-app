@@ -174,7 +174,7 @@ export async function fetchGrowwPortfolio(
     {
       area: "Mutual funds",
       reason:
-        "Groww's trading API does not expose mutual fund folios, only demat holdings. Keep adding them by hand.",
+        "Groww's trading API does not expose mutual fund folios, only demat holdings. Upload your mutual fund holdings file on the Connections page instead.",
     },
     {
       area: "Digital gold and MCX commodities",

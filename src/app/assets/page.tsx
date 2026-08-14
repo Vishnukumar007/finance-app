@@ -123,9 +123,11 @@ export default function AssetsPage() {
                                 {asset.institution}
                               </p>
                             ) : null}
-                            {asset.source?.provider === "groww" ? (
+                            {asset.source ? (
                               <p className="text-xs text-slate-400">
-                                {asset.source.missingSince
+                                {asset.source.provider === "groww-file"
+                                  ? "Imported from a Groww file"
+                                  : asset.source.missingSince
                                   ? "No longer in Groww — check it"
                                   : asset.source.priceUnavailable
                                     ? "Synced from Groww · no live price"

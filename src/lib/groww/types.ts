@@ -56,10 +56,20 @@ export interface GrowwConnection {
   lastError?: string;
 }
 
+/** The last mutual fund file the user uploaded. */
+export interface GrowwImport {
+  importedAt: string;
+  fileName: string;
+  added: number;
+  updated: number;
+  problems: string[];
+}
+
 /** Marks an asset that a provider owns, so a sync updates it instead of adding a duplicate. */
 export interface AssetSource {
-  provider: "groww";
-  /** ISIN — stable across symbol changes. */
+  /** `groww` comes from the API sync, `groww-file` from an uploaded holdings file. */
+  provider: "groww" | "groww-file";
+  /** ISIN, or the folio for imported funds — stable across name changes. */
   externalId: string;
   syncedAt: string;
   /** Set when the holding disappeared from the provider. */

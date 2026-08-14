@@ -107,15 +107,18 @@ export function AssetDetail({ assetId }: { assetId: string }) {
         />
       </div>
 
-      {source?.provider === "groww" ? (
+      {source ? (
         <Card>
           <h2 className="text-base font-semibold text-slate-900">
-            Synced from Groww
+            {source.provider === "groww"
+              ? "Synced from Groww"
+              : "Imported from a Groww file"}
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            The quantity and value come from your Groww demat holdings, so there
-            is nothing to update by hand. Last updated{" "}
-            {formatDateTime(source.syncedAt)}.
+            {source.provider === "groww"
+              ? "The quantity and value come from your Groww demat holdings, so there is nothing to update by hand."
+              : "These numbers come from the mutual fund file you uploaded. Upload a newer file to refresh them."}{" "}
+            Last updated {formatDateTime(source.syncedAt)}.
           </p>
           {source.missingSince ? (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -131,9 +134,19 @@ export function AssetDetail({ assetId }: { assetId: string }) {
             </p>
           ) : null}
           <div className="mt-4">
-            <Button variant="secondary" onClick={() => void sync()} disabled={syncing}>
-              {syncing ? "Syncing…" : "Sync now"}
-            </Button>
+            {source.provider === "groww" ? (
+              <Button
+                variant="secondary"
+                onClick={() => void sync()}
+                disabled={syncing}
+              >
+                {syncing ? "Syncing…" : "Sync now"}
+              </Button>
+            ) : (
+              <LinkButton href="/connections" variant="secondary">
+                Upload a newer file
+              </LinkButton>
+            )}
           </div>
         </Card>
       ) : debtDetails && valuation ? (
