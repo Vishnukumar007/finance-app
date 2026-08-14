@@ -30,6 +30,17 @@ Debt assets ask for how the instrument works instead of asking you for the value
 
 Tenure can be entered in **days, months or years**. The value today, the money put in so far and the maturity value are derived from those inputs and are recalculated as time passes. Each debt form (and the asset page) shows a "How is this calculated?" panel at the top with the exact formula used for that instrument.
 
+### Groww sync
+Connect a Groww account under **Connections** and your Groww holdings appear as assets on their own:
+- Sign in with a daily access token, an API key + secret, or an API key + TOTP from the Groww Trading API.
+- Stocks and ETFs come in with quantity, average price and today's price; gold / silver ETFs and SGBs land under Commodities.
+- Holdings are matched by ISIN, so a sync updates the existing asset instead of adding a duplicate, and new Groww purchases show up automatically.
+- Synced assets cannot be edited by hand — the asset page shows when it was last updated and a **Sync now** button. A sync also runs on its own when the data is more than 30 minutes old.
+- A holding that stops coming back from Groww is flagged instead of deleted.
+- Anything Groww cannot give us is listed instead of guessed: **mutual fund folios, digital gold and MCX commodities are not part of the Groww Trading API**, and holdings without a live price show the invested amount.
+
+Credentials stay in your browser; they are sent to a small server route (`/api/groww/sync`) only for the duration of a sync, because Groww cannot be called directly from the browser.
+
 ### Liabilities
 - Add, edit, view and delete liabilities (home, vehicle, personal, education, credit card, gold, business, friends/family, other).
 - Stores lender, original amount, outstanding amount, interest rate, start/end date, EMI and notes.
