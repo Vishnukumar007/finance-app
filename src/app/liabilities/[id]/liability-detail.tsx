@@ -33,11 +33,11 @@ export function LiabilityDetail({ liabilityId }: { liabilityId: string }) {
 
   const paid = Math.max(liability.originalAmount - liability.outstandingAmount, 0);
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!liability) return;
     if (!window.confirm(`Delete "${liability.name}"? This cannot be undone.`))
       return;
-    deleteLiability(liability.id);
+    await deleteLiability(liability.id);
     router.push("/liabilities");
   }
 
@@ -61,7 +61,7 @@ export function LiabilityDetail({ liabilityId }: { liabilityId: string }) {
             >
               Edit
             </LinkButton>
-            <Button variant="danger" onClick={handleDelete}>
+            <Button variant="danger" onClick={() => void handleDelete()}>
               Delete
             </Button>
           </div>

@@ -6,7 +6,7 @@ A beginner-friendly Next.js app to track three things only:
 2. **Liabilities** — what you owe
 3. **Goals** — what you are saving for
 
-Data is stored in the browser (localStorage), so there is no backend or login.
+Data is stored in Postgres through Prisma, so the same numbers show up on every browser and device you open the app in. There is still no login.
 
 ## Modules
 
@@ -59,7 +59,12 @@ Total asset value, invested amount, profit / loss, total outstanding liabilities
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000
+cp .env.example .env   # then put your Postgres connection string in DATABASE_URL
+npm run db:generate    # generate the Prisma client
+npm run db:push        # create the tables
+npm run dev            # http://localhost:3000
 ```
+
+Node.js 20.19+ / 22.12+ is needed for Prisma 7. Groww credentials are the one thing that stays in the browser — they are never written to the database.
 
 Other scripts: `npm run build`, `npm run start`, `npm run lint`.

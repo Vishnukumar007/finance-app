@@ -1,25 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { normalizeLiability } from "@/lib/server/records";
 import type { Liability } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-function normalizeLiabilityRecord(record: any): Liability {
-  return {
-    id: record.id,
-    name: record.name,
-    type: record.type,
-    lender: record.lender,
-    originalAmount: Number(record.originalAmount ?? 0),
-    outstandingAmount: Number(record.outstandingAmount ?? 0),
-    interestRate: Number(record.interestRate ?? 0),
-    startDate: record.startDate,
-    endDate: record.endDate,
-    emiAmount: Number(record.emiAmount ?? 0),
-    notes: record.notes ?? "",
-    createdAt: record.createdAt.toISOString(),
-  };
-}
 
 function sanitizeLiabilityInput(payload: unknown): Partial<Liability> {
   if (typeof payload !== "object" || payload === null) {
@@ -30,7 +14,10 @@ function sanitizeLiabilityInput(payload: unknown): Partial<Liability> {
 
   return {
     name: typeof value.name === "string" ? value.name : undefined,
-    type: typeof value.type === "string" ? value.type : undefined,
+    type:
+      typeof value.type === "string"
+        ? (value.type as Liability["type"])
+        : undefined,
     lender: typeof value.lender === "string" ? value.lender : undefined,
     originalAmount:
       value.originalAmount !== undefined ? Number(value.originalAmount) : undefined,
@@ -56,7 +43,7 @@ export async function GET(
     return NextResponse.json({ error: "Liability not found" }, { status: 404 });
   }
 
-  return NextResponse.json(normalizeLiabilityRecord(record));
+  return NextResponse.json(normalizeLiability(record));
 }
 
 export async function PATCH(
@@ -89,7 +76,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(normalizeLiabilityRecord(record));
+    return NextResponse.json(normalizeLiability(record));
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },

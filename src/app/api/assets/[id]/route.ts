@@ -1,25 +1,11 @@
 import { NextResponse } from "next/server";
 import type { Asset, AssetCategoryId } from "@/lib/types";
 import { db } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import { normalizeAsset } from "@/lib/server/records";
+import { unlinkAssetFromGoals } from "@/lib/server/goal-links";
 
 export const dynamic = "force-dynamic";
-
-function normalizeAssetRecord(record: any): Asset {
-  return {
-    id: record.id,
-    name: record.name,
-    categoryId: record.categoryId as AssetCategoryId,
-    type: record.type,
-    institution: record.institution,
-    investedAmount: Number(record.investedAmount ?? 0),
-    currentValue: Number(record.currentValue ?? 0),
-    startDate: record.startDate,
-    notes: record.notes ?? "",
-    debtDetails: record.debtDetails ?? undefined,
-    source: record.source ?? undefined,
-    createdAt: record.createdAt.toISOString(),
-  };
-}
 
 function sanitizeAssetInput(payload: unknown): Partial<Asset> {
   if (typeof payload !== "object" || payload === null) {
@@ -53,7 +39,7 @@ export async function GET(
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   }
 
-  return NextResponse.json(normalizeAssetRecord(record));
+  return NextResponse.json(normalizeAsset(record));
 }
 
 export async function PATCH(
@@ -79,12 +65,16 @@ export async function PATCH(
         }),
         ...(payload.startDate !== undefined && { startDate: payload.startDate }),
         ...(payload.notes !== undefined && { notes: payload.notes }),
-        ...(payload.debtDetails !== undefined && { debtDetails: payload.debtDetails }),
-        ...(payload.source !== undefined && { source: payload.source }),
+        ...(payload.debtDetails !== undefined && {
+          debtDetails: payload.debtDetails as unknown as Prisma.InputJsonValue,
+        }),
+        ...(payload.source !== undefined && {
+          source: payload.source as unknown as Prisma.InputJsonValue,
+        }),
       },
     });
 
-    return NextResponse.json(normalizeAssetRecord(record));
+    return NextResponse.json(normalizeAsset(record));
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
@@ -99,5 +89,6 @@ export async function DELETE(
 ) {
   const { id } = await params;
   await db.asset.delete({ where: { id } }).catch(() => null);
+  await unlinkAssetFromGoals(id);
   return NextResponse.json({ success: true });
 }

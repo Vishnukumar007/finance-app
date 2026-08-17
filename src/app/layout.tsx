@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Nav } from "@/components/nav";
+import { DataError } from "@/components/data-error";
 
 export const metadata: Metadata = {
   title: "My Money — Assets, Liabilities & Goals",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col bg-slate-50">
         <Nav />
+        <DataError />
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
           {children}
         </main>

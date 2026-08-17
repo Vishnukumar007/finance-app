@@ -106,7 +106,7 @@ export function AssetForm({
     setDebtValues(nextKind ? defaultDebtValues(nextKind) : {});
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!values.name.trim()) {
       setError("Please give this asset a name.");
@@ -133,18 +133,26 @@ export function AssetForm({
       notes: values.notes.trim(),
       debtDetails,
     };
-    if (asset) {
-      updateAsset(asset.id, payload);
-      router.push(`/assets/${asset.id}`);
-    } else {
-      const created = addAsset(payload);
-      router.push(`/assets/${created.id}`);
+    try {
+      if (asset) {
+        await updateAsset(asset.id, payload);
+        router.push(`/assets/${asset.id}`);
+      } else {
+        const created = await addAsset(payload);
+        router.push(`/assets/${created.id}`);
+      }
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not save this asset.",
+      );
     }
   }
 
   return (
     <Card>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <Field label="Asset name" hint="Example: HDFC Flexi Cap Fund">
           <TextInput
             value={values.name}
