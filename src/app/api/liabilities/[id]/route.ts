@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { normalizeLiability } from "@/lib/server/records";
 import type { Liability } from "@/lib/types";
+import { authErrorResponse, requireUnlockedUser } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -36,14 +37,24 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-  const record = await db.liability.findUnique({ where: { id } });
+  try {
+    const user = await requireUnlockedUser();
+    const { id } = await params;
+    const record = await db.liability.findFirst({
+      where: { id, userId: user.id },
+    });
 
-  if (!record) {
-    return NextResponse.json({ error: "Liability not found" }, { status: 404 });
+    if (!record) {
+      return NextResponse.json({ error: "Liability not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(normalizeLiability(record));
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unknown error" }, { status: 500 })
+    );
   }
-
-  return NextResponse.json(normalizeLiability(record));
 }
 
 export async function PATCH(
@@ -51,8 +62,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await requireUnlockedUser();
     const { id } = await params;
     const payload = sanitizeLiabilityInput(await request.json());
+
+    const owned = await db.liability.findFirst({
+      where: { id, userId: user.id },
+      select: { id: true },
+    });
+
+    if (!owned) {
+      return NextResponse.json({ error: "Liability not found" }, { status: 404 });
+    }
 
     const record = await db.liability.update({
       where: { id },
@@ -78,9 +99,12 @@ export async function PATCH(
 
     return NextResponse.json(normalizeLiability(record));
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 400 },
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        { error: error instanceof Error ? error.message : "Unknown error" },
+        { status: 400 },
+      )
     );
   }
 }
@@ -89,7 +113,16 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-  await db.liability.delete({ where: { id } }).catch(() => null);
-  return NextResponse.json({ success: true });
+  try {
+    const user = await requireUnlockedUser();
+    const { id } = await params;
+
+    await db.liability.deleteMany({ where: { id, userId: user.id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unknown error" }, { status: 500 })
+    );
+  }
 }

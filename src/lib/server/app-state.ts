@@ -13,25 +13,29 @@ export function isAppStateKey(value: unknown): value is AppStateKey {
 }
 
 export async function readAppState<K extends AppStateKey>(
+  userId: string,
   key: K,
 ): Promise<AppStateValues[K] | undefined> {
-  const record = await db.appState.findUnique({ where: { key } });
+  const record = await db.appState.findUnique({
+    where: { userId_key: { userId, key } },
+  });
   return (record?.value as AppStateValues[K] | undefined) ?? undefined;
 }
 
 /** A null value clears the entry, which is how disconnecting is stored. */
 export async function writeAppState(
+  userId: string,
   key: AppStateKey,
   value: unknown,
 ): Promise<void> {
   if (value === null || value === undefined) {
-    await db.appState.deleteMany({ where: { key } });
+    await db.appState.deleteMany({ where: { userId, key } });
     return;
   }
 
   await db.appState.upsert({
-    where: { key },
-    create: { key, value: value as object },
+    where: { userId_key: { userId, key } },
+    create: { userId, key, value: value as object },
     update: { value: value as object },
   });
 }

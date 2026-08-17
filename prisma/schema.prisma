@@ -7,16 +7,36 @@ datasource db {
   provider = "postgresql"
 }
 
+/// One row per Google account that has signed in.
+model User {
+  id             String    @id @default(cuid())
+  googleId       String    @unique
+  email          String    @unique
+  name           String
+  image          String
+  pinHash        String?
+  pinUpdatedAt   DateTime?
+  pinFailedCount Int       @default(0)
+  pinLockedUntil DateTime?
+  createdAt      DateTime  @default(now())
+  lastLoginAt    DateTime  @default(now())
+
+  @@map("users")
+}
+
 model AppState {
-  key       String   @id
+  userId    String
+  key       String
   value     Json
   updatedAt DateTime @updatedAt
 
+  @@id([userId, key])
   @@map("app_state")
 }
 
 model Asset {
   id            String   @id @default(cuid())
+  userId        String   @default("")
   name          String
   categoryId    String
   type          String
@@ -29,11 +49,13 @@ model Asset {
   source        Json?
   createdAt     DateTime @default(now())
 
+  @@index([userId])
   @@map("assets")
 }
 
 model Liability {
   id               String   @id @default(cuid())
+  userId           String   @default("")
   name             String
   type             String
   lender           String
@@ -46,11 +68,13 @@ model Liability {
   notes            String
   createdAt        DateTime @default(now())
 
+  @@index([userId])
   @@map("liabilities")
 }
 
 model Goal {
   id            String   @id @default(cuid())
+  userId        String   @default("")
   name          String
   description   String
   targetAmount  Float
@@ -58,5 +82,6 @@ model Goal {
   linkedAssetIds Json
   createdAt     DateTime @default(now())
 
+  @@index([userId])
   @@map("goals")
 }

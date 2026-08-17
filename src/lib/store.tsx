@@ -40,6 +40,15 @@ function setState(changes: Partial<StoreState>): void {
   for (const listener of listeners) listener();
 }
 
+export class RequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
@@ -51,7 +60,13 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     | null;
 
   if (!response.ok || body === null) {
-    throw new Error(body?.error ?? "The database request failed.");
+    if (response.status === 401 || response.status === 423) {
+      window.dispatchEvent(new Event("auth-changed"));
+    }
+    throw new RequestError(
+      body?.error ?? "The database request failed.",
+      response.status,
+    );
   }
   return body;
 }
@@ -69,6 +84,11 @@ async function loadFromDatabase(): Promise<void> {
       error: undefined,
     });
   } catch (error) {
+    if (error instanceof RequestError && [401, 423].includes(error.status)) {
+      setState({ ...EMPTY_STATE, loaded: true });
+      return;
+    }
+
     setState({
       loaded: true,
       error:
@@ -77,6 +97,18 @@ async function loadFromDatabase(): Promise<void> {
           : "Could not read your data from the database.",
     });
   }
+}
+
+/** Signing out or locking must not leave another account's numbers on screen. */
+export function resetStore(): void {
+  loading = null;
+  setState(EMPTY_STATE);
+}
+
+/** Reloads everything for the account that just unlocked. */
+export async function reloadStore(): Promise<void> {
+  loading = loadFromDatabase();
+  await loading;
 }
 
 function subscribe(listener: () => void): () => void {

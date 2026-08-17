@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchGrowwPortfolio, GrowwError } from "@/lib/groww/api";
 import type { GrowwCredentials } from "@/lib/groww/types";
+import { authErrorResponse, requireUnlockedUser } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,15 @@ function parseCredentials(body: unknown): GrowwCredentials | undefined {
 
 /** Proxies Groww on the server: the browser cannot call api.groww.in directly. */
 export async function POST(request: Request) {
+  try {
+    await requireUnlockedUser();
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unknown error" }, { status: 500 })
+    );
+  }
+
   const credentials = parseCredentials(await request.json().catch(() => null));
   if (!credentials) {
     return NextResponse.json(
