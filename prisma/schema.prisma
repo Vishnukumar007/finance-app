@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Asset {
+  id            String   @id @default(cuid())
+  name          String
+  categoryId    String
+  type          String
+  institution   String
+  investedAmount Float
+  currentValue  Float
+  startDate     String
+  notes         String
+  debtDetails   Json?
+  source        Json?
+  createdAt     DateTime @default(now())
+
+  @@map("assets")
+}
+
+model Liability {
+  id               String   @id @default(cuid())
+  name             String
+  type             String
+  lender           String
+  originalAmount   Float
+  outstandingAmount Float
+  interestRate     Float
+  startDate        String
+  endDate          String
+  emiAmount        Float
+  notes            String
+  createdAt        DateTime @default(now())
+
+  @@map("liabilities")
+}
+
+model Goal {
+  id            String   @id @default(cuid())
+  name          String
+  description   String
+  targetAmount  Float
+  targetDate    String
+  linkedAssetIds Json
+  createdAt     DateTime @default(now())
+
+  @@map("goals")
+}
