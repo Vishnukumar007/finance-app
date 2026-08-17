@@ -19,18 +19,18 @@ export function useGrowwSync() {
     async (credentials?: GrowwCredentials) => {
       const used = credentials ?? loadCredentials();
       if (!used) {
-        recordGrowwError(
+        await recordGrowwError(
           "No saved Groww credentials — connect again to sync.",
         );
         return false;
       }
       setSyncing(true);
       try {
-        applyGrowwSync(await requestSync(used));
+        await applyGrowwSync(await requestSync(used));
         saveCredentials(used);
         return true;
       } catch (error) {
-        recordGrowwError(
+        await recordGrowwError(
           error instanceof Error ? error.message : "The sync with Groww failed.",
         );
         return false;

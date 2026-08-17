@@ -1,25 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { normalizeLiability } from "@/lib/server/records";
 import type { Liability } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-function normalizeLiabilityRecord(record: any): Liability {
-  return {
-    id: record.id,
-    name: record.name,
-    type: record.type,
-    lender: record.lender,
-    originalAmount: Number(record.originalAmount ?? 0),
-    outstandingAmount: Number(record.outstandingAmount ?? 0),
-    interestRate: Number(record.interestRate ?? 0),
-    startDate: record.startDate,
-    endDate: record.endDate,
-    emiAmount: Number(record.emiAmount ?? 0),
-    notes: record.notes ?? "",
-    createdAt: record.createdAt.toISOString(),
-  };
-}
 
 function sanitizeLiabilityInput(payload: unknown): Partial<Liability> {
   if (typeof payload !== "object" || payload === null) {
@@ -30,7 +14,9 @@ function sanitizeLiabilityInput(payload: unknown): Partial<Liability> {
 
   return {
     name: typeof value.name === "string" ? value.name : "",
-    type: typeof value.type === "string" ? value.type : "Other",
+    type: typeof value.type === "string"
+        ? (value.type as Liability["type"])
+        : "Other",
     lender: typeof value.lender === "string" ? value.lender : "",
     originalAmount: Number(value.originalAmount ?? 0),
     outstandingAmount: Number(value.outstandingAmount ?? 0),
@@ -44,10 +30,10 @@ function sanitizeLiabilityInput(payload: unknown): Partial<Liability> {
 
 export async function GET() {
   const records = await db.liability.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json(records.map(normalizeLiabilityRecord));
+  return NextResponse.json(records.map(normalizeLiability));
 }
 
 export async function POST(request: Request) {
@@ -69,7 +55,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(normalizeLiabilityRecord(record), { status: 201 });
+    return NextResponse.json(normalizeLiability(record), { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });

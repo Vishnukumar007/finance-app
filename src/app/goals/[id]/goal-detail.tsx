@@ -36,10 +36,10 @@ export function GoalDetail({ goalId }: { goalId: string }) {
 
   const progress = goalProgress(goal, assets);
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!goal) return;
     if (!window.confirm(`Delete "${goal.name}"? This cannot be undone.`)) return;
-    deleteGoal(goal.id);
+    await deleteGoal(goal.id);
     router.push("/goals");
   }
 
@@ -57,7 +57,7 @@ export function GoalDetail({ goalId }: { goalId: string }) {
             <LinkButton href={`/goals/${goal.id}/edit`} variant="secondary">
               Edit
             </LinkButton>
-            <Button variant="danger" onClick={handleDelete}>
+            <Button variant="danger" onClick={() => void handleDelete()}>
               Delete
             </Button>
           </div>

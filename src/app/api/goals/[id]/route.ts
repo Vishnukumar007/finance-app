@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { normalizeGoal } from "@/lib/server/records";
 import type { Goal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-function normalizeGoalRecord(record: any): Goal {
-  return {
-    id: record.id,
-    name: record.name,
-    description: record.description ?? "",
-    targetAmount: Number(record.targetAmount ?? 0),
-    targetDate: record.targetDate,
-    linkedAssetIds: Array.isArray(record.linkedAssetIds)
-      ? (record.linkedAssetIds as string[])
-      : [],
-    createdAt: record.createdAt.toISOString(),
-  };
-}
 
 function sanitizeGoalInput(payload: unknown): Partial<Goal> {
   if (typeof payload !== "object" || payload === null) {
@@ -49,7 +36,7 @@ export async function GET(
     return NextResponse.json({ error: "Goal not found" }, { status: 404 });
   }
 
-  return NextResponse.json(normalizeGoalRecord(record));
+  return NextResponse.json(normalizeGoal(record));
 }
 
 export async function PATCH(
@@ -75,7 +62,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(normalizeGoalRecord(record));
+    return NextResponse.json(normalizeGoal(record));
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },

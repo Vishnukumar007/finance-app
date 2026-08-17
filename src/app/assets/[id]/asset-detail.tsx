@@ -47,19 +47,19 @@ export function AssetDetail({ assetId }: { assetId: string }) {
   const usedInGoals = goals.filter((g) => g.linkedAssetIds.includes(asset.id));
   const source = asset.source;
 
-  function handleUpdateValue(event: React.FormEvent) {
+  async function handleUpdateValue(event: React.FormEvent) {
     event.preventDefault();
     if (!asset) return;
     const parsed = Number(newValue);
     if (!newValue || !Number.isFinite(parsed) || parsed < 0) return;
-    updateAsset(asset.id, { currentValue: parsed });
+    await updateAsset(asset.id, { currentValue: parsed });
     setNewValue("");
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!asset) return;
     if (!window.confirm(`Delete "${asset.name}"? This cannot be undone.`)) return;
-    deleteAsset(asset.id);
+    await deleteAsset(asset.id);
     router.push("/assets");
   }
 
@@ -79,7 +79,7 @@ export function AssetDetail({ assetId }: { assetId: string }) {
                 Edit
               </LinkButton>
             )}
-            <Button variant="danger" onClick={handleDelete}>
+            <Button variant="danger" onClick={() => void handleDelete()}>
               Delete
             </Button>
           </div>
@@ -189,7 +189,7 @@ export function AssetDetail({ assetId }: { assetId: string }) {
             automatically.
           </p>
           <form
-            onSubmit={handleUpdateValue}
+            onSubmit={(e) => void handleUpdateValue(e)}
             className="mt-4 flex flex-wrap items-end gap-3"
           >
             <div className="w-56">

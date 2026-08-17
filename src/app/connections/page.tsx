@@ -70,7 +70,7 @@ export default function ConnectionsPage() {
     event.preventDefault();
     const credentials = credentialsFromForm();
     if (!credentials) return;
-    connectGroww();
+    await connectGroww();
     const ok = await sync(credentials);
     if (ok) {
       setAccessToken("");
@@ -79,9 +79,9 @@ export default function ConnectionsPage() {
     }
   }
 
-  function handleDisconnect() {
+  async function handleDisconnect() {
     clearCredentials();
-    disconnectGroww();
+    await disconnectGroww();
   }
 
   const activeMode = MODES.find((option) => option.value === mode)!;
@@ -92,7 +92,7 @@ export default function ConnectionsPage() {
   async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    applyMfImport(parseMfCsv(await file.text()), file.name);
+    await applyMfImport(parseMfCsv(await file.text()), file.name);
     event.target.value = "";
   }
 
@@ -125,7 +125,7 @@ export default function ConnectionsPage() {
               >
                 {syncing ? "Syncing…" : "Sync now"}
               </Button>
-              <Button variant="danger" onClick={handleDisconnect}>
+              <Button variant="danger" onClick={() => void handleDisconnect()}>
                 Disconnect
               </Button>
             </div>
