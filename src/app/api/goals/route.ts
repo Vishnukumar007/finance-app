@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { normalizeGoal } from "@/lib/server/records";
 import type { Goal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-function normalizeGoalRecord(record: any): Goal {
-  return {
-    id: record.id,
-    name: record.name,
-    description: record.description ?? "",
-    targetAmount: Number(record.targetAmount ?? 0),
-    targetDate: record.targetDate,
-    linkedAssetIds: Array.isArray(record.linkedAssetIds)
-      ? record.linkedAssetIds as string[]
-      : [],
-    createdAt: record.createdAt.toISOString(),
-  };
-}
 
 function sanitizeGoalInput(payload: unknown): Partial<Goal> {
   if (typeof payload !== "object" || payload === null) {
@@ -38,10 +25,10 @@ function sanitizeGoalInput(payload: unknown): Partial<Goal> {
 
 export async function GET() {
   const records = await db.goal.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json(records.map(normalizeGoalRecord));
+  return NextResponse.json(records.map(normalizeGoal));
 }
 
 export async function POST(request: Request) {
@@ -58,7 +45,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(normalizeGoalRecord(record), { status: 201 });
+    return NextResponse.json(normalizeGoal(record), { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });

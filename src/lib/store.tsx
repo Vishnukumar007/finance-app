@@ -11,8 +11,6 @@ import type {
 } from "./groww/types";
 import type { Asset, Goal, Liability } from "./types";
 
-const STORAGE_KEY = "finance-tracker-data";
-
 export interface StoredData {
   assets: Asset[];
   liabilities: Liability[];
@@ -21,232 +19,265 @@ export interface StoredData {
   growwImport?: GrowwImport;
 }
 
-const EMPTY_DATA: StoredData = { assets: [], liabilities: [], goals: [] };
+interface StoreState extends StoredData {
+  loaded: boolean;
+  error?: string;
+}
 
-let cache: StoredData | null = null;
+const EMPTY_STATE: StoreState = {
+  assets: [],
+  liabilities: [],
+  goals: [],
+  loaded: false,
+};
+
+let state: StoreState = EMPTY_STATE;
+let loading: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 
-function readStorage(): StoredData {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return EMPTY_DATA;
-    const parsed = JSON.parse(raw) as Partial<StoredData>;
-    return {
-      assets: (parsed.assets ?? []).map((asset) => deriveAsset(asset)),
-      liabilities: parsed.liabilities ?? [],
-      goals: parsed.goals ?? [],
-      groww: parsed.groww,
-      growwImport: parsed.growwImport,
-    };
-  } catch {
-    return EMPTY_DATA;
+function setState(changes: Partial<StoreState>): void {
+  state = { ...state, ...changes };
+  for (const listener of listeners) listener();
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: init?.body ? { "Content-Type": "application/json" } : undefined,
+    ...init,
+  });
+  const body = (await response.json().catch(() => null)) as
+    | (T & { error?: string })
+    | null;
+
+  if (!response.ok || body === null) {
+    throw new Error(body?.error ?? "The database request failed.");
   }
+  return body;
 }
 
-function getSnapshot(): StoredData {
-  if (cache === null) cache = readStorage();
-  return cache;
-}
-
-function getServerSnapshot(): StoredData {
-  return EMPTY_DATA;
+async function loadFromDatabase(): Promise<void> {
+  try {
+    const data = await requestJson<StoredData>("/api/state");
+    setState({
+      assets: data.assets.map((asset) => deriveAsset(asset)),
+      liabilities: data.liabilities,
+      goals: data.goals,
+      groww: data.groww,
+      growwImport: data.growwImport,
+      loaded: true,
+      error: undefined,
+    });
+  } catch (error) {
+    setState({
+      loaded: true,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not read your data from the database.",
+    });
+  }
 }
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
+  loading ??= loadFromDatabase();
   return () => {
     listeners.delete(listener);
   };
 }
 
-function setData(updater: (previous: StoredData) => StoredData): void {
-  cache = updater(getSnapshot());
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
-  for (const listener of listeners) listener();
+function getSnapshot(): StoreState {
+  return state;
 }
 
+function getServerSnapshot(): StoreState {
+  return EMPTY_STATE;
+}
+
+/** Ids for holdings created by a merge; the database keeps whatever id it is given. */
 function newId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Keeps the client-only flag out of render-time `window` checks. */
-function useIsHydrated(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false,
-  );
+async function saveGroww(groww: GrowwConnection | undefined): Promise<void> {
+  await requestJson("/api/app-state", {
+    method: "PUT",
+    body: JSON.stringify({ key: "groww", value: groww ?? null }),
+  });
+  setState({ groww });
 }
 
 export function useStore() {
   const data = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const loaded = useIsHydrated();
 
-  const addAsset = useCallback((asset: Omit<Asset, "id" | "createdAt">) => {
-    const created: Asset = deriveAsset({
-      ...asset,
-      id: newId(),
-      createdAt: new Date().toISOString(),
-    });
-    setData((prev) => ({ ...prev, assets: [...prev.assets, created] }));
-    return created;
-  }, []);
-
-  const updateAsset = useCallback(
-    (id: string, changes: Partial<Omit<Asset, "id">>) => {
-      setData((prev) => ({
-        ...prev,
-        assets: prev.assets.map((a) =>
-          a.id === id ? deriveAsset({ ...a, ...changes }) : a,
-        ),
-      }));
+  const addAsset = useCallback(
+    async (asset: Omit<Asset, "id" | "createdAt">) => {
+      const created = deriveAsset(
+        await requestJson<Asset>("/api/assets", {
+          method: "POST",
+          body: JSON.stringify(asset),
+        }),
+      );
+      setState({ assets: [...state.assets, created] });
+      return created;
     },
     [],
   );
 
-  const deleteAsset = useCallback((id: string) => {
-    setData((prev) => ({
-      ...prev,
-      assets: prev.assets.filter((a) => a.id !== id),
-      goals: prev.goals.map((goal) => ({
+  const updateAsset = useCallback(
+    async (id: string, changes: Partial<Omit<Asset, "id">>) => {
+      const updated = deriveAsset(
+        await requestJson<Asset>(`/api/assets/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(changes),
+        }),
+      );
+      setState({
+        assets: state.assets.map((a) => (a.id === id ? updated : a)),
+      });
+      return updated;
+    },
+    [],
+  );
+
+  const deleteAsset = useCallback(async (id: string) => {
+    await requestJson(`/api/assets/${id}`, { method: "DELETE" });
+    setState({
+      assets: state.assets.filter((a) => a.id !== id),
+      goals: state.goals.map((goal) => ({
         ...goal,
         linkedAssetIds: goal.linkedAssetIds.filter((assetId) => assetId !== id),
       })),
-    }));
+    });
   }, []);
 
   const addLiability = useCallback(
-    (liability: Omit<Liability, "id" | "createdAt">) => {
-      const created: Liability = {
-        ...liability,
-        id: newId(),
-        createdAt: new Date().toISOString(),
-      };
-      setData((prev) => ({
-        ...prev,
-        liabilities: [...prev.liabilities, created],
-      }));
+    async (liability: Omit<Liability, "id" | "createdAt">) => {
+      const created = await requestJson<Liability>("/api/liabilities", {
+        method: "POST",
+        body: JSON.stringify(liability),
+      });
+      setState({ liabilities: [...state.liabilities, created] });
       return created;
     },
     [],
   );
 
   const updateLiability = useCallback(
-    (id: string, changes: Partial<Omit<Liability, "id">>) => {
-      setData((prev) => ({
-        ...prev,
-        liabilities: prev.liabilities.map((l) =>
-          l.id === id ? { ...l, ...changes } : l,
-        ),
-      }));
+    async (id: string, changes: Partial<Omit<Liability, "id">>) => {
+      const updated = await requestJson<Liability>(`/api/liabilities/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(changes),
+      });
+      setState({
+        liabilities: state.liabilities.map((l) => (l.id === id ? updated : l)),
+      });
+      return updated;
     },
     [],
   );
 
-  const deleteLiability = useCallback((id: string) => {
-    setData((prev) => ({
-      ...prev,
-      liabilities: prev.liabilities.filter((l) => l.id !== id),
-    }));
+  const deleteLiability = useCallback(async (id: string) => {
+    await requestJson(`/api/liabilities/${id}`, { method: "DELETE" });
+    setState({ liabilities: state.liabilities.filter((l) => l.id !== id) });
   }, []);
 
-  const connectGroww = useCallback(() => {
-    setData((prev) => ({
-      ...prev,
-      groww: prev.groww ?? { connectedAt: new Date().toISOString() },
-    }));
+  const addGoal = useCallback(async (goal: Omit<Goal, "id" | "createdAt">) => {
+    const created = await requestJson<Goal>("/api/goals", {
+      method: "POST",
+      body: JSON.stringify(goal),
+    });
+    setState({ goals: [...state.goals, created] });
+    return created;
   }, []);
 
-  const disconnectGroww = useCallback(() => {
-    setData((prev) => ({ ...prev, groww: undefined }));
+  const updateGoal = useCallback(
+    async (id: string, changes: Partial<Omit<Goal, "id">>) => {
+      const updated = await requestJson<Goal>(`/api/goals/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(changes),
+      });
+      setState({ goals: state.goals.map((g) => (g.id === id ? updated : g)) });
+      return updated;
+    },
+    [],
+  );
+
+  const deleteGoal = useCallback(async (id: string) => {
+    await requestJson(`/api/goals/${id}`, { method: "DELETE" });
+    setState({ goals: state.goals.filter((g) => g.id !== id) });
+  }, []);
+
+  const connectGroww = useCallback(async () => {
+    if (state.groww) return;
+    await saveGroww({ connectedAt: new Date().toISOString() });
+  }, []);
+
+  const disconnectGroww = useCallback(async () => {
+    await saveGroww(undefined);
   }, []);
 
   /** Updates matching assets, adds new holdings and flags ones Groww no longer returns. */
-  const applyGrowwSync = useCallback((result: GrowwSyncResult) => {
-    setData((prev) => {
-      const merged = mergeGrowwHoldings(prev.assets, result, newId);
-      return {
-        ...prev,
-        assets: merged.assets,
-        groww: {
-          connectedAt: prev.groww?.connectedAt ?? result.syncedAt,
-          lastSyncedAt: result.syncedAt,
-          lastResult: { ...merged.report, gaps: result.gaps },
-        },
-      };
+  const applyGrowwSync = useCallback(async (result: GrowwSyncResult) => {
+    const merged = mergeGrowwHoldings(state.assets, result, newId);
+    const saved = await requestJson<Asset[]>("/api/assets/bulk", {
+      method: "POST",
+      body: JSON.stringify({ assets: merged.assets }),
+    });
+    setState({ assets: saved.map((asset) => deriveAsset(asset)) });
+    await saveGroww({
+      connectedAt: state.groww?.connectedAt ?? result.syncedAt,
+      lastSyncedAt: result.syncedAt,
+      lastResult: { ...merged.report, gaps: result.gaps },
     });
   }, []);
 
-  const recordGrowwError = useCallback((message: string) => {
-    setData((prev) => ({
-      ...prev,
-      groww: {
-        connectedAt: prev.groww?.connectedAt ?? new Date().toISOString(),
-        lastSyncedAt: prev.groww?.lastSyncedAt,
-        lastResult: prev.groww?.lastResult,
-        lastError: message,
-      },
-    }));
+  const recordGrowwError = useCallback(async (message: string) => {
+    await saveGroww({
+      connectedAt: state.groww?.connectedAt ?? new Date().toISOString(),
+      lastSyncedAt: state.groww?.lastSyncedAt,
+      lastResult: state.groww?.lastResult,
+      lastError: message,
+    });
   }, []);
 
   /** Applies an uploaded mutual fund file, keeping the problems it reported. */
   const applyMfImport = useCallback(
-    (result: MfImportResult, fileName: string) => {
+    async (result: MfImportResult, fileName: string) => {
       const importedAt = new Date().toISOString();
-      setData((prev) => {
-        const merged = mergeMfHoldings(
-          prev.assets,
-          result.holdings,
-          importedAt,
-          newId,
-        );
-        return {
-          ...prev,
-          assets: merged.assets,
-          growwImport: {
-            importedAt,
-            fileName,
-            added: merged.added,
-            updated: merged.updated,
-            problems: result.problems,
-          },
-        };
+      const merged = mergeMfHoldings(
+        state.assets,
+        result.holdings,
+        importedAt,
+        newId,
+      );
+      const saved = await requestJson<Asset[]>("/api/assets/bulk", {
+        method: "POST",
+        body: JSON.stringify({ assets: merged.assets }),
+      });
+      const growwImport: GrowwImport = {
+        importedAt,
+        fileName,
+        added: merged.added,
+        updated: merged.updated,
+        problems: result.problems,
+      };
+      await requestJson("/api/app-state", {
+        method: "PUT",
+        body: JSON.stringify({ key: "growwImport", value: growwImport }),
+      });
+      setState({
+        assets: saved.map((asset) => deriveAsset(asset)),
+        growwImport,
       });
     },
     [],
   );
 
-  const addGoal = useCallback((goal: Omit<Goal, "id" | "createdAt">) => {
-    const created: Goal = {
-      ...goal,
-      id: newId(),
-      createdAt: new Date().toISOString(),
-    };
-    setData((prev) => ({ ...prev, goals: [...prev.goals, created] }));
-    return created;
-  }, []);
-
-  const updateGoal = useCallback(
-    (id: string, changes: Partial<Omit<Goal, "id">>) => {
-      setData((prev) => ({
-        ...prev,
-        goals: prev.goals.map((g) => (g.id === id ? { ...g, ...changes } : g)),
-      }));
-    },
-    [],
-  );
-
-  const deleteGoal = useCallback((id: string) => {
-    setData((prev) => ({
-      ...prev,
-      goals: prev.goals.filter((g) => g.id !== id),
-    }));
-  }, []);
-
   return useMemo(
     () => ({
       ...data,
-      loaded,
       addAsset,
       updateAsset,
       deleteAsset,
@@ -264,7 +295,6 @@ export function useStore() {
     }),
     [
       data,
-      loaded,
       addAsset,
       updateAsset,
       deleteAsset,

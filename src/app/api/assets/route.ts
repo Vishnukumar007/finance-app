@@ -1,25 +1,10 @@
 import { NextResponse } from "next/server";
 import type { Asset, AssetCategoryId } from "@/lib/types";
 import { db } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import { normalizeAsset } from "@/lib/server/records";
 
 export const dynamic = "force-dynamic";
-
-function normalizeAssetRecord(record: any): Asset {
-  return {
-    id: record.id,
-    name: record.name,
-    categoryId: record.categoryId as AssetCategoryId,
-    type: record.type,
-    institution: record.institution,
-    investedAmount: Number(record.investedAmount ?? 0),
-    currentValue: Number(record.currentValue ?? 0),
-    startDate: record.startDate,
-    notes: record.notes ?? "",
-    debtDetails: record.debtDetails ?? undefined,
-    source: record.source ?? undefined,
-    createdAt: record.createdAt.toISOString(),
-  };
-}
 
 function sanitizeAssetInput(payload: unknown): Partial<Asset> {
   if (typeof payload !== "object" || payload === null) {
@@ -49,10 +34,10 @@ function sanitizeAssetInput(payload: unknown): Partial<Asset> {
 
 export async function GET() {
   const records = await db.asset.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json(records.map(normalizeAssetRecord));
+  return NextResponse.json(records.map(normalizeAsset));
 }
 
 export async function POST(request: Request) {
@@ -69,13 +54,17 @@ export async function POST(request: Request) {
         currentValue: Number(payload.currentValue ?? 0),
         startDate: payload.startDate ?? "",
         notes: payload.notes ?? "",
-        ...(payload.debtDetails !== undefined && { debtDetails: payload.debtDetails }),
-        ...(payload.source !== undefined && { source: payload.source }),
+        ...(payload.debtDetails !== undefined && {
+          debtDetails: payload.debtDetails as unknown as Prisma.InputJsonValue,
+        }),
+        ...(payload.source !== undefined && {
+          source: payload.source as unknown as Prisma.InputJsonValue,
+        }),
         createdAt: new Date(payload.createdAt ?? Date.now()),
       },
     });
 
-    return NextResponse.json(normalizeAssetRecord(record), { status: 201 });
+    return NextResponse.json(normalizeAsset(record), { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });

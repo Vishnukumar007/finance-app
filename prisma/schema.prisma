@@ -7,6 +7,14 @@ datasource db {
   provider = "postgresql"
 }
 
+model AppState {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_state")
+}
+
 model Asset {
   id            String   @id @default(cuid())
   name          String

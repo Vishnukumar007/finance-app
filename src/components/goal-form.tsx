@@ -27,7 +27,7 @@ export function GoalForm({ goal }: { goal?: Goal }) {
     .filter((a) => linkedAssetIds.includes(a.id))
     .reduce((sum, a) => sum + a.currentValue, 0);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim()) {
       setError("Please give this goal a name.");
@@ -45,17 +45,25 @@ export function GoalForm({ goal }: { goal?: Goal }) {
       targetDate,
       linkedAssetIds,
     };
-    if (goal) {
-      updateGoal(goal.id, payload);
-      router.push(`/goals/${goal.id}`);
-    } else {
-      const created = addGoal(payload);
-      router.push(`/goals/${created.id}`);
+    try {
+      if (goal) {
+        await updateGoal(goal.id, payload);
+        router.push(`/goals/${goal.id}`);
+      } else {
+        const created = await addGoal(payload);
+        router.push(`/goals/${created.id}`);
+      }
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not save this goal.",
+      );
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
       <Card>
         <div className="space-y-4">
           <Field label="Goal name" hint="Example: Build a house">

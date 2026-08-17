@@ -68,7 +68,7 @@ export function LiabilityForm({ liability }: { liability?: Liability }) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!values.name.trim()) {
       setError("Please give this liability a name.");
@@ -88,18 +88,26 @@ export function LiabilityForm({ liability }: { liability?: Liability }) {
       emiAmount: toNumber(values.emiAmount),
       notes: values.notes.trim(),
     };
-    if (liability) {
-      updateLiability(liability.id, payload);
-      router.push(`/liabilities/${liability.id}`);
-    } else {
-      const created = addLiability(payload);
-      router.push(`/liabilities/${created.id}`);
+    try {
+      if (liability) {
+        await updateLiability(liability.id, payload);
+        router.push(`/liabilities/${liability.id}`);
+      } else {
+        const created = await addLiability(payload);
+        router.push(`/liabilities/${created.id}`);
+      }
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not save this liability.",
+      );
     }
   }
 
   return (
     <Card>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <Field label="Liability name" hint="Example: Flat home loan">
           <TextInput
             value={values.name}
