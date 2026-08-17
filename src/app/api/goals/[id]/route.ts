@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { normalizeGoal } from "@/lib/server/records";
 import type { Goal } from "@/lib/types";
+import { authErrorResponse, requireUnlockedUser } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +30,22 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-  const record = await db.goal.findUnique({ where: { id } });
+  try {
+    const user = await requireUnlockedUser();
+    const { id } = await params;
+    const record = await db.goal.findFirst({ where: { id, userId: user.id } });
 
-  if (!record) {
-    return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+    if (!record) {
+      return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(normalizeGoal(record));
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unknown error" }, { status: 500 })
+    );
   }
-
-  return NextResponse.json(normalizeGoal(record));
 }
 
 export async function PATCH(
@@ -44,8 +53,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await requireUnlockedUser();
     const { id } = await params;
     const payload = sanitizeGoalInput(await request.json());
+
+    const owned = await db.goal.findFirst({
+      where: { id, userId: user.id },
+      select: { id: true },
+    });
+
+    if (!owned) {
+      return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+    }
 
     const record = await db.goal.update({
       where: { id },
@@ -64,9 +83,12 @@ export async function PATCH(
 
     return NextResponse.json(normalizeGoal(record));
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 400 },
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        { error: error instanceof Error ? error.message : "Unknown error" },
+        { status: 400 },
+      )
     );
   }
 }
@@ -75,7 +97,16 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-  await db.goal.delete({ where: { id } }).catch(() => null);
-  return NextResponse.json({ success: true });
+  try {
+    const user = await requireUnlockedUser();
+    const { id } = await params;
+
+    await db.goal.deleteMany({ where: { id, userId: user.id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unknown error" }, { status: 500 })
+    );
+  }
 }

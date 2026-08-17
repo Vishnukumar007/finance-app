@@ -3,6 +3,7 @@ import type { Asset, AssetCategoryId } from "@/lib/types";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { normalizeAsset } from "@/lib/server/records";
+import { authErrorResponse, requireUnlockedUser } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -33,19 +34,30 @@ function sanitizeAssetInput(payload: unknown): Partial<Asset> {
 }
 
 export async function GET() {
-  const records = await db.asset.findMany({
-    orderBy: { createdAt: "asc" },
-  });
+  try {
+    const user = await requireUnlockedUser();
+    const records = await db.asset.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
 
-  return NextResponse.json(records.map(normalizeAsset));
+    return NextResponse.json(records.map(normalizeAsset));
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unknown error" }, { status: 500 })
+    );
+  }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await requireUnlockedUser();
     const payload = sanitizeAssetInput(await request.json());
 
     const record = await db.asset.create({
       data: {
+        userId: user.id,
         name: payload.name ?? "",
         categoryId: payload.categoryId ?? "other",
         type: payload.type ?? "",
@@ -67,6 +79,9 @@ export async function POST(request: Request) {
     return NextResponse.json(normalizeAsset(record), { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: message }, { status: 400 })
+    );
   }
 }

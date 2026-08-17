@@ -6,9 +6,17 @@ A beginner-friendly Next.js app to track three things only:
 2. **Liabilities** — what you owe
 3. **Goals** — what you are saving for
 
-Data is stored in Postgres through Prisma, so the same numbers show up on every browser and device you open the app in. There is still no login.
+Data is stored in Postgres through Prisma, so the same numbers show up on every browser and device you open the app in. You sign in with Google and unlock the app with a 4 digit PIN, and every account only ever sees its own assets, liabilities and goals.
 
 ## Modules
+
+### Sign in and PIN lock
+- **Google is the only way in.** No passwords, no email links.
+- The first sign-in asks you to **create a 4 digit PIN**. It is stored as a salted scrypt hash, never in plain text.
+- The PIN is asked again whenever you come back to the app: switching to another app or tab for more than 15 seconds, closing the browser, or 30 minutes after the last unlock all lock it again. **Lock** in the header locks it straight away.
+- Five wrong PINs lock the PIN for 15 minutes.
+- Assets, liabilities, goals and Groww connections are per account — every API route reads and writes only the rows belonging to the signed-in user.
+- Change your PIN under **Security**.
 
 ### Assets
 - Add, edit, view and delete assets.
@@ -59,10 +67,29 @@ Total asset value, invested amount, profit / loss, total outstanding liabilities
 
 ```bash
 npm install
-cp .env.example .env   # then put your Postgres connection string in DATABASE_URL
+cp .env.example .env   # then fill in DATABASE_URL, the Google keys and AUTH_SECRET
 npm run db:generate    # generate the Prisma client
 npm run db:push        # create the tables
 npm run dev            # http://localhost:3000
+```
+
+### Google sign-in setup
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials) create an **OAuth client ID** of type *Web application*.
+2. Add the redirect URIs you use:
+   - `http://localhost:3000/api/auth/google/callback`
+   - `https://your-app.onrender.com/api/auth/google/callback`
+3. Put the client ID and secret in `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+4. Set `AUTH_SECRET` to a long random string (`openssl rand -base64 48`) — it signs the session and PIN cookies.
+5. On Render also set `APP_URL` to the public URL, so the redirect URI matches the one you registered.
+6. Optionally set `ALLOWED_EMAILS` to a comma separated list to keep the deployment to your own accounts.
+
+### Data created before login existed
+
+Rows written by the old, login-free version have an empty owner and are invisible to everyone. Sign in once with the account that should own them, then run:
+
+```bash
+npm run db:claim -- you@gmail.com
 ```
 
 Node.js 20.19+ / 22.12+ is needed for Prisma 7. Groww credentials are the one thing that stays in the browser — they are never written to the database.

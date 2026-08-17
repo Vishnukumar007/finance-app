@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { normalizeAsset } from "@/lib/server/records";
 import { Prisma } from "@/generated/prisma/client";
 import type { Asset } from "@/lib/types";
+import { authErrorResponse, requireUnlockedUser } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ function assetData(asset: Asset) {
 /** Saves a whole merged asset list at once, which is what a Groww sync or a file import produces. */
 export async function POST(request: Request) {
   try {
+    const user = await requireUnlockedUser();
     const body = (await request.json()) as { assets?: unknown };
 
     if (!Array.isArray(body.assets)) {
@@ -31,28 +33,43 @@ export async function POST(request: Request) {
     }
 
     const assets = body.assets as Asset[];
+    const owned = new Set(
+      (
+        await db.asset.findMany({
+          where: { userId: user.id },
+          select: { id: true },
+        })
+      ).map((asset) => asset.id),
+    );
 
     await db.$transaction(
       assets.map((asset) => {
         const data = assetData(asset);
-        return db.asset.upsert({
-          where: { id: asset.id },
-          create: {
-            id: asset.id,
-            ...data,
-            createdAt: new Date(asset.createdAt ?? Date.now()),
-          },
-          update: data,
-        });
+        return owned.has(asset.id)
+          ? db.asset.update({ where: { id: asset.id }, data })
+          : db.asset.create({
+              data: {
+                id: asset.id,
+                userId: user.id,
+                ...data,
+                createdAt: new Date(asset.createdAt ?? Date.now()),
+              },
+            });
       }),
     );
 
-    const records = await db.asset.findMany({ orderBy: { createdAt: "asc" } });
+    const records = await db.asset.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
     return NextResponse.json(records.map(normalizeAsset));
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 400 },
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json(
+        { error: error instanceof Error ? error.message : "Unknown error" },
+        { status: 400 },
+      )
     );
   }
 }

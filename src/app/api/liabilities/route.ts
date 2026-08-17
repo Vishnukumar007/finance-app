@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { normalizeLiability } from "@/lib/server/records";
 import type { Liability } from "@/lib/types";
+import { authErrorResponse, requireUnlockedUser } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -29,19 +30,30 @@ function sanitizeLiabilityInput(payload: unknown): Partial<Liability> {
 }
 
 export async function GET() {
-  const records = await db.liability.findMany({
-    orderBy: { createdAt: "asc" },
-  });
+  try {
+    const user = await requireUnlockedUser();
+    const records = await db.liability.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
 
-  return NextResponse.json(records.map(normalizeLiability));
+    return NextResponse.json(records.map(normalizeLiability));
+  } catch (error) {
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: "Unknown error" }, { status: 500 })
+    );
+  }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await requireUnlockedUser();
     const payload = sanitizeLiabilityInput(await request.json());
 
     const record = await db.liability.create({
       data: {
+        userId: user.id,
         name: payload.name ?? "",
         type: payload.type ?? "Other",
         lender: payload.lender ?? "",
@@ -58,6 +70,9 @@ export async function POST(request: Request) {
     return NextResponse.json(normalizeLiability(record), { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return (
+      authErrorResponse(error) ??
+      NextResponse.json({ error: message }, { status: 400 })
+    );
   }
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { lockApp, signOut, useAuth } from "@/lib/auth-client";
 
 const LINKS = [
   { href: "/", label: "Dashboard" },
@@ -9,10 +10,12 @@ const LINKS = [
   { href: "/liabilities", label: "Liabilities" },
   { href: "/goals", label: "Goals" },
   { href: "/connections", label: "Connections" },
+  { href: "/security", label: "Security" },
 ];
 
 export function Nav() {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -41,6 +44,27 @@ export function Nav() {
             );
           })}
         </nav>
+        <div className="ml-auto flex items-center gap-3">
+          {user ? (
+            <span className="hidden text-sm text-slate-500 sm:inline">
+              {user.email}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void lockApp()}
+            className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            Lock
+          </button>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </header>
   );

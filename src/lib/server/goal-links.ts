@@ -1,8 +1,11 @@
 import { db } from "@/lib/db";
 
 /** A deleted asset must stop counting towards the goals it was linked to. */
-export async function unlinkAssetFromGoals(assetId: string): Promise<void> {
-  const goals = await db.goal.findMany();
+export async function unlinkAssetFromGoals(
+  userId: string,
+  assetId: string,
+): Promise<void> {
+  const goals = await db.goal.findMany({ where: { userId } });
 
   const affected = goals.filter(
     (goal) =>
