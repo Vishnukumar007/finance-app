@@ -35,8 +35,10 @@ export function PinForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const fieldClass = "flex flex-col gap-1.5";
+  const labelClass = "text-sm font-medium text-slate-600";
   const inputClass =
-    "w-40 rounded-xl border border-slate-200 px-4 py-3 text-center text-2xl tracking-[0.6em] text-slate-900 focus:border-slate-400 focus:outline-none";
+    "w-full max-w-[13rem] rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-2xl leading-8 tracking-[0.5em] indent-[0.5em] text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-900/10 focus:outline-none";
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -71,15 +73,15 @@ export function PinForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div>
         <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
         <p className="mt-1 text-sm text-slate-500">{description}</p>
       </div>
 
       {askCurrent ? (
-        <div className="space-y-1">
-          <label htmlFor={`${fieldId}-current`} className="text-sm text-slate-600">
+        <div className={fieldClass}>
+          <label htmlFor={`${fieldId}-current`} className={labelClass}>
             Current PIN
           </label>
           <input
@@ -88,14 +90,16 @@ export function PinForm({
             inputMode="numeric"
             autoComplete="off"
             type="password"
+            maxLength={4}
+            placeholder="••••"
             value={currentPin}
             onChange={(event) => setCurrentPin(digitsOnly(event.target.value))}
           />
         </div>
       ) : null}
 
-      <div className="space-y-1">
-        <label htmlFor={fieldId} className="text-sm text-slate-600">
+      <div className={fieldClass}>
+        <label htmlFor={fieldId} className={labelClass}>
           {confirm ? "New PIN" : "PIN"}
         </label>
         <input
@@ -104,6 +108,8 @@ export function PinForm({
           inputMode="numeric"
           autoComplete="off"
           type="password"
+          maxLength={4}
+          placeholder="••••"
           autoFocus
           value={pin}
           onChange={(event) => setPin(digitsOnly(event.target.value))}
@@ -111,8 +117,8 @@ export function PinForm({
       </div>
 
       {confirm ? (
-        <div className="space-y-1">
-          <label htmlFor={`${fieldId}-repeat`} className="text-sm text-slate-600">
+        <div className={fieldClass}>
+          <label htmlFor={`${fieldId}-repeat`} className={labelClass}>
             Repeat PIN
           </label>
           <input
@@ -121,6 +127,8 @@ export function PinForm({
             inputMode="numeric"
             autoComplete="off"
             type="password"
+            maxLength={4}
+            placeholder="••••"
             value={repeat}
             onChange={(event) => setRepeat(digitsOnly(event.target.value))}
           />
@@ -133,8 +141,8 @@ export function PinForm({
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={busy}>
+      <div className="flex flex-col gap-2 sm:flex-row-reverse sm:items-center sm:justify-end">
+        <Button type="submit" disabled={busy} className="w-full sm:w-auto">
           {busy ? "Checking…" : submitLabel}
         </Button>
         {footer}
