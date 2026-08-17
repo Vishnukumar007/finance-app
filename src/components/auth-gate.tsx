@@ -9,8 +9,8 @@ import { Button, Card } from "@/components/ui";
 
 function Screen({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 items-center px-4 py-16">
-      <Card className="w-full">{children}</Card>
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-1 items-center justify-center px-4 py-12">
+      <Card className="w-full p-6 sm:p-8">{children}</Card>
     </main>
   );
 }
@@ -86,7 +86,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!pinSet || !unlocked) {
     const signOutButton = (
-      <Button variant="secondary" type="button" onClick={() => void signOut()}>
+      <Button
+        variant="secondary"
+        type="button"
+        className="w-full sm:w-auto"
+        onClick={() => void signOut()}
+      >
         Sign out
       </Button>
     );
@@ -99,7 +104,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
     return (
       <Screen>
-        <p className="mb-4 text-sm text-slate-500">Signed in as {user.email}</p>
+        <p className="mb-5 truncate text-sm text-slate-500">
+          Signed in as {user.email}
+        </p>
         {pinSet ? (
           <PinForm
             title="Enter your PIN"

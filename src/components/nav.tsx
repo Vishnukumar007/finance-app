@@ -19,7 +19,7 @@ export function Nav() {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         <Link href="/" className="text-base font-semibold text-slate-900">
           My Money
         </Link>
@@ -44,9 +44,9 @@ export function Nav() {
             );
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-1">
           {user ? (
-            <span className="hidden text-sm text-slate-500 sm:inline">
+            <span className="mr-2 hidden max-w-[14rem] truncate text-sm text-slate-500 lg:inline">
               {user.email}
             </span>
           ) : null}
