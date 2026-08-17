@@ -84,6 +84,16 @@ npm run dev            # http://localhost:3000
 5. On Render also set `APP_URL` to the public URL, so the redirect URI matches the one you registered.
 6. Optionally set `ALLOWED_EMAILS` to a comma separated list to keep the deployment to your own accounts.
 
+### Deploying to Render
+
+Build command (the schema push creates the `users` table and the owner columns — without it sign-in fails with a Prisma error):
+
+```bash
+npm install && npm run db:generate && npm run db:push && npm run build
+```
+
+Start command: `npm run start`. `APP_URL` must be the public URL — every redirect is built from it, otherwise Render's internal `localhost:10000` origin leaks into the browser.
+
 ### Data created before login existed
 
 Rows written by the old, login-free version have an empty owner and are invisible to everyone. Sign in once with the account that should own them, then run:

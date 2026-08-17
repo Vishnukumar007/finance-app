@@ -21,10 +21,25 @@ export function googleConfig() {
   return { clientId, clientSecret };
 }
 
-/** Uses `APP_URL` when set so the redirect matches the one registered with Google. */
+/**
+ * Public origin of the app. Behind a proxy such as Render the request URL is
+ * the internal one (localhost:10000), so `APP_URL` wins when it is set.
+ */
+export function appBaseUrl(request: Request): string {
+  const configured = process.env.APP_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  if (forwardedHost) {
+    const proto = request.headers.get("x-forwarded-proto") ?? "https";
+    return `${proto}://${forwardedHost}`;
+  }
+  return new URL(request.url).origin;
+}
+
+/** Must match the redirect URI registered with Google exactly. */
 export function redirectUri(request: Request): string {
-  const base = process.env.APP_URL ?? new URL(request.url).origin;
-  return `${base.replace(/\/$/, "")}/api/auth/google/callback`;
+  return `${appBaseUrl(request)}/api/auth/google/callback`;
 }
 
 export function authorizeUrl(options: {

@@ -1,7 +1,12 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { exchangeCode, fetchProfile, isAllowedEmail } from "@/lib/server/google";
+import {
+  appBaseUrl,
+  exchangeCode,
+  fetchProfile,
+  isAllowedEmail,
+} from "@/lib/server/google";
 import { startSession } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +15,7 @@ const OAUTH_COOKIE = "mm_oauth";
 
 function loginError(request: Request, message: string): NextResponse {
   return NextResponse.redirect(
-    new URL(`/login?error=${encodeURIComponent(message)}`, request.url),
+    new URL(`/login?error=${encodeURIComponent(message)}`, appBaseUrl(request)),
   );
 }
 
@@ -57,8 +62,9 @@ export async function GET(request: Request) {
     });
 
     await startSession(user.id);
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/", appBaseUrl(request)));
   } catch (cause) {
+    console.error("Google sign-in failed", cause);
     return loginError(
       request,
       cause instanceof Error ? cause.message : "Google sign-in failed.",

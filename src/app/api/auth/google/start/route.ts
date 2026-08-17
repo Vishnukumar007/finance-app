@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
-import { authorizeUrl } from "@/lib/server/google";
+import { appBaseUrl, authorizeUrl } from "@/lib/server/google";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent(message)}`, request.url),
+      new URL(`/login?error=${encodeURIComponent(message)}`, appBaseUrl(request)),
     );
   }
 }
